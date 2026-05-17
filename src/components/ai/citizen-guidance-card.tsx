@@ -91,7 +91,8 @@ export function CitizenGuidanceCard({ disasterId }: { disasterId?: string | null
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
-            <Badge>{guidance.meta.status === "completed" ? "Gemini live" : guidance.meta.status}</Badge>
+            <Badge>{guidance.meta.status === "completed" ? "Gemma 4 local" : guidance.meta.status}</Badge>
+            {guidance.meta.runtime ? <Badge>{guidance.meta.runtime.replace(/_/g, " ")}</Badge> : null}
             <Badge>{Math.round(guidance.meta.confidence * 100)}% confidence</Badge>
             <Badge>Sources: {guidance.meta.sourceIds.join(", ") || "live context"}</Badge>
             {guidance.meta.warnings.length ? (

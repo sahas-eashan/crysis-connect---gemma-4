@@ -98,6 +98,6 @@ ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO ai_audit_logs (id, action, role, user_id, model, status, review_status, confidence, source_ids, warnings, created_at)
 VALUES
-  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'generateIncidentBrief', 'government', 'gov-demo-1', 'gemini-2.5-pro', 'completed', 'approved', 0.84, ARRAY['22222222-2222-2222-2222-222222222222'], ARRAY['Human-reviewed in demo environment.'], now() - interval '15 minutes'),
-  ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'triageSosCase', 'ngo', 'ngo-demo-1', 'gemini-2.5-flash', 'completed', 'pending_review', 0.80, ARRAY['88888888-8888-8888-8888-888888888888'], ARRAY['Responder assignment still requires operator confirmation.'], now() - interval '5 minutes')
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'generateIncidentBrief', 'government', 'gov-demo-1', 'gemma4:26b-it', 'completed', 'approved', 0.84, ARRAY['22222222-2222-2222-2222-222222222222'], ARRAY['Human-reviewed in demo environment.'], now() - interval '15 minutes'),
+  ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'triageSosCase', 'ngo', 'ngo-demo-1', 'gemma4:e4b-it', 'completed', 'pending_review', 0.80, ARRAY['88888888-8888-8888-8888-888888888888'], ARRAY['Responder assignment still requires operator confirmation.'], now() - interval '5 minutes')
 ON CONFLICT (id) DO NOTHING;

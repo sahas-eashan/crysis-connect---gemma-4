@@ -164,6 +164,13 @@ type AiResponseMeta {
   requiresHumanApproval: Boolean!
   audit: AiAuditRef!
   riskFlags: AiRiskFlags!
+  modelName: String
+  modelVersion: String
+  adapterVersion: String
+  runtime: String
+  offlineMode: Boolean
+  dataFreshnessMinutes: Int
+  groundingSources: [String!]
 }
 
 type IncidentBrief {

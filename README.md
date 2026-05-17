@@ -1,6 +1,6 @@
-# CrisisConnect
+# CrisisConnect Edge
 
-Unified disaster management and community resilience platform for citizens, NGOs, field workers, and government agencies.
+Gemma 4-powered local-first disaster management and community resilience platform for citizens, NGOs, field workers, and government agencies.
 
 ## Problem Statement
 
@@ -41,6 +41,7 @@ CrisisConnect addresses that gap with a single platform that:
 
 ## Key Innovation Features
 
+- **Gemma 4 local intelligence**: structured SOS preparation, multilingual safety guidance, command briefs, and dispatch recommendations run through a Gemma provider layer.
 - **Geofenced alerts**: disaster polygons in PostGIS drive targeted notifications.
 - **Capacity-aware safe-zone routing**: citizens are routed to the nearest shelter with remaining capacity.
 - **Intelligent SOS triage**: nearest available responders are identified using geospatial proximity.
@@ -55,6 +56,7 @@ CrisisConnect addresses that gap with a single platform that:
 - **Maps**: MapLibre + OpenStreetMap
 - **Charts**: Recharts
 - **Database extensions**: PostGIS
+- **AI runtime**: Gemma 4 via local Ollama / reachable edge gateway
 
 ## Architecture Overview
 
@@ -96,6 +98,8 @@ npm install --legacy-peer-deps
 ### 2. Configure frontend environment
 
 Copy `.env.example` to `.env.local` and fill in the Terraform outputs after provisioning AWS.
+
+For local Gemma 4 development, keep `AI_PROVIDER=gemma`, `GEMMA_RUNTIME=ollama`, and set `GEMMA_ENDPOINT=http://localhost:11434`. For deployed AWS Lambda, `GEMMA_ENDPOINT` must point to a reachable Gemma gateway or hosted endpoint; Lambda `localhost` is the Lambda sandbox, not your development machine.
 
 ### 3. Provision infrastructure
 

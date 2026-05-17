@@ -166,6 +166,13 @@ export type AiResponseMeta = {
   requiresHumanApproval: boolean;
   audit: AiAuditRef;
   riskFlags: AiRiskFlags;
+  modelName?: string | null;
+  modelVersion?: string | null;
+  adapterVersion?: string | null;
+  runtime?: "on_device" | "edge_gateway" | "command_center" | "cloud" | string | null;
+  offlineMode?: boolean | null;
+  dataFreshnessMinutes?: number | null;
+  groundingSources?: string[] | null;
 };
 
 export type IncidentBrief = {

@@ -89,9 +89,50 @@ variable "demo_sms_recipients" {
   default     = ""
 }
 
-variable "gemini_api_key" {
-  description = "Gemini API key used by the AI orchestration lambda."
+variable "ai_provider" {
+  description = "AI provider used by the AI orchestration Lambda."
   type        = string
-  sensitive   = true
-  default     = ""
+  default     = "gemma"
+}
+
+variable "gemma_runtime" {
+  description = "Gemma runtime adapter. Module A supports ollama."
+  type        = string
+  default     = "ollama"
+}
+
+variable "gemma_endpoint" {
+  description = "Reachable Gemma endpoint for the AI Lambda. In deployed AWS, do not use localhost unless a Gemma gateway runs inside the same runtime."
+  type        = string
+  default     = "http://localhost:11434"
+}
+
+variable "gemma_interactive_model" {
+  description = "Gemma model used for citizen, NGO, alert, and dispatch interactions."
+  type        = string
+  default     = "gemma4:e4b-it"
+}
+
+variable "gemma_analysis_model" {
+  description = "Gemma model used for government command analysis."
+  type        = string
+  default     = "gemma4:26b-it"
+}
+
+variable "gemma_finetuned_model" {
+  description = "Optional fine-tuned Gemma adapter/model identifier for CrisisConnect disaster behavior."
+  type        = string
+  default     = "crisisconnect-gemma4-e4b-sos"
+}
+
+variable "gemma_mode" {
+  description = "Gemma routing mode label for audit and deployment documentation."
+  type        = string
+  default     = "local_first"
+}
+
+variable "ai_allow_cloud_fallback" {
+  description = "Whether the AI Lambda may use a cloud/hosted fallback runtime."
+  type        = bool
+  default     = false
 }

@@ -77,9 +77,14 @@ resource "aws_lambda_function" "ai" {
       DB_NAME                      = var.db_name
       DB_USER                      = var.db_username
       DB_PASSWORD                  = var.db_password
-      GEMINI_API_KEY               = var.gemini_api_key
-      GEMINI_INTERACTIVE_MODEL     = "gemini-2.5-flash"
-      GEMINI_ANALYSIS_MODEL        = "gemini-2.5-pro"
+      AI_PROVIDER                  = var.ai_provider
+      GEMMA_RUNTIME                = var.gemma_runtime
+      GEMMA_ENDPOINT               = var.gemma_endpoint
+      GEMMA_INTERACTIVE_MODEL      = var.gemma_interactive_model
+      GEMMA_ANALYSIS_MODEL         = var.gemma_analysis_model
+      GEMMA_FINETUNED_MODEL        = var.gemma_finetuned_model
+      GEMMA_MODE                   = var.gemma_mode
+      AI_ALLOW_CLOUD_FALLBACK      = tostring(var.ai_allow_cloud_fallback)
       AI_RATE_LIMIT_WINDOW_MINUTES = "5"
       AI_RATE_LIMIT_DEFAULT        = "40"
       AI_RATE_LIMIT_CITIZEN        = "24"

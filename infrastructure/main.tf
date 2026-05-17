@@ -41,6 +41,10 @@ resource "terraform_data" "package_lambdas" {
     filesha256("${path.module}/../lambda/worker/package-lock.json"),
     filesha256("${path.module}/../lambda/worker/tsconfig.json"),
     filesha256("${path.module}/../lambda/ai/index.ts"),
+    filesha256("${path.module}/../lambda/ai/providers/gemma-provider.ts"),
+    filesha256("${path.module}/../lambda/ai/providers/hosted-gemma-provider.ts"),
+    filesha256("${path.module}/../lambda/ai/providers/local-gemma-provider.ts"),
+    filesha256("${path.module}/../lambda/ai/providers/provider-types.ts"),
     filesha256("${path.module}/../lambda/ai/package.json"),
     filesha256("${path.module}/../lambda/ai/package-lock.json"),
     filesha256("${path.module}/../lambda/ai/tsconfig.json")

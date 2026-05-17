@@ -205,6 +205,13 @@ export const queries = {
             unsafeContent
             reasons
           }
+          modelName
+          modelVersion
+          adapterVersion
+          runtime
+          offlineMode
+          dataFreshnessMinutes
+          groundingSources
         }
       }
     }
@@ -426,6 +433,13 @@ export const mutations = {
             unsafeContent
             reasons
           }
+          modelName
+          modelVersion
+          adapterVersion
+          runtime
+          offlineMode
+          dataFreshnessMinutes
+          groundingSources
         }
       }
     }
@@ -463,6 +477,13 @@ export const mutations = {
             unsafeContent
             reasons
           }
+          modelName
+          modelVersion
+          adapterVersion
+          runtime
+          offlineMode
+          dataFreshnessMinutes
+          groundingSources
         }
       }
     }
@@ -502,6 +523,13 @@ export const mutations = {
             unsafeContent
             reasons
           }
+          modelName
+          modelVersion
+          adapterVersion
+          runtime
+          offlineMode
+          dataFreshnessMinutes
+          groundingSources
         }
       }
     }
@@ -544,6 +572,13 @@ export const mutations = {
             unsafeContent
             reasons
           }
+          modelName
+          modelVersion
+          adapterVersion
+          runtime
+          offlineMode
+          dataFreshnessMinutes
+          groundingSources
         }
       }
     }
@@ -583,6 +618,13 @@ export const mutations = {
             unsafeContent
             reasons
           }
+          modelName
+          modelVersion
+          adapterVersion
+          runtime
+          offlineMode
+          dataFreshnessMinutes
+          groundingSources
         }
       }
     }
@@ -619,6 +661,13 @@ export const mutations = {
             unsafeContent
             reasons
           }
+          modelName
+          modelVersion
+          adapterVersion
+          runtime
+          offlineMode
+          dataFreshnessMinutes
+          groundingSources
         }
       }
     }

@@ -499,6 +499,13 @@ class AiResponseMeta {
     required this.warnings,
     required this.requiresHumanApproval,
     required this.audit,
+    this.modelName,
+    this.modelVersion,
+    this.adapterVersion,
+    this.runtime,
+    this.offlineMode,
+    this.dataFreshnessMinutes,
+    this.groundingSources = const [],
   });
 
   factory AiResponseMeta.fromJson(Map<String, dynamic> json) {
@@ -516,6 +523,15 @@ class AiResponseMeta {
       audit: AiAuditRef.fromJson(
         (json['audit'] as Map<String, dynamic>? ?? const {}),
       ),
+      modelName: json['modelName'] as String?,
+      modelVersion: json['modelVersion'] as String?,
+      adapterVersion: json['adapterVersion'] as String?,
+      runtime: json['runtime'] as String?,
+      offlineMode: json['offlineMode'] as bool?,
+      dataFreshnessMinutes: json['dataFreshnessMinutes'] as int?,
+      groundingSources: (json['groundingSources'] as List<dynamic>? ?? const [])
+          .map((item) => item.toString())
+          .toList(),
     );
   }
 
@@ -525,6 +541,13 @@ class AiResponseMeta {
   final List<String> warnings;
   final bool requiresHumanApproval;
   final AiAuditRef audit;
+  final String? modelName;
+  final String? modelVersion;
+  final String? adapterVersion;
+  final String? runtime;
+  final bool? offlineMode;
+  final int? dataFreshnessMinutes;
+  final List<String> groundingSources;
 }
 
 class CitizenAiGuidance {
@@ -808,6 +831,13 @@ class AppGraphQL {
             createdAt
             reviewStatus
           }
+          modelName
+          modelVersion
+          adapterVersion
+          runtime
+          offlineMode
+          dataFreshnessMinutes
+          groundingSources
         }
       }
     }
@@ -916,6 +946,13 @@ class AppGraphQL {
             createdAt
             reviewStatus
           }
+          modelName
+          modelVersion
+          adapterVersion
+          runtime
+          offlineMode
+          dataFreshnessMinutes
+          groundingSources
         }
       }
     }

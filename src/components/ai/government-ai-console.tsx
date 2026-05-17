@@ -212,7 +212,8 @@ export function GovernmentAiConsole({ disasterId }: { disasterId?: string | null
 
       {brief ? (
         <div className="mt-4 flex flex-wrap gap-3 text-xs text-muted">
-          <Badge>{brief.meta.status === "completed" ? "Gemini live" : brief.meta.status}</Badge>
+          <Badge>{brief.meta.status === "completed" ? "Gemma 4 local" : brief.meta.status}</Badge>
+          {brief.meta.runtime ? <Badge>{brief.meta.runtime.replace(/_/g, " ")}</Badge> : null}
           <Badge>{Math.round(brief.meta.confidence * 100)}% confidence</Badge>
           <Badge>{brief.meta.requiresHumanApproval ? "Human review required" : "Autonomous"}</Badge>
           <Badge>Audit: {brief.meta.audit.id}</Badge>

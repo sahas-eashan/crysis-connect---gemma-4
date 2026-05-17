@@ -141,7 +141,7 @@ export const mockAiAuditLogs: AiAuditRef[] = [
   {
     id: "ai-audit-1",
     action: "generateIncidentBrief",
-    model: "gemini-2.5-pro",
+    model: "gemma4:26b-it",
     status: "completed",
     createdAt: new Date().toISOString(),
     reviewStatus: "approved"
@@ -149,7 +149,7 @@ export const mockAiAuditLogs: AiAuditRef[] = [
   {
     id: "ai-audit-2",
     action: "triageSosCase",
-    model: "gemini-2.5-flash",
+    model: "gemma4:e4b-it",
     status: "completed",
     createdAt: new Date().toISOString(),
     reviewStatus: "pending_review"
@@ -212,7 +212,7 @@ export const mockAlertDraft: AlertDraft = {
     audit: {
       id: "ai-audit-3",
       action: "generateAlertDraft",
-      model: "gemini-2.5-flash",
+      model: "gemma4:e4b-it",
       status: "completed",
       createdAt: new Date().toISOString(),
       reviewStatus: "pending_review"
@@ -252,7 +252,7 @@ export const mockOperationsRecommendationSet: OperationsRecommendationSet = {
     audit: {
       id: "ai-audit-4",
       action: "recommendOperations",
-      model: "gemini-2.5-flash",
+      model: "gemma4:e4b-it",
       status: "completed",
       createdAt: new Date().toISOString(),
       reviewStatus: "pending_review"
@@ -333,7 +333,7 @@ export const mockResourceDispatchPlan: ResourceDispatchPlan = {
     audit: {
       id: "ai-audit-5",
       action: "recommendResourceDispatch",
-      model: "gemini-2.5-flash",
+      model: "gemma4:e4b-it",
       status: "completed",
       createdAt: new Date().toISOString(),
       reviewStatus: "pending_review"
@@ -373,7 +373,7 @@ export const mockCitizenGuidance: CitizenGuidance = {
     audit: {
       id: "ai-audit-6",
       action: "getCitizenGuidance",
-      model: "gemini-2.5-flash",
+      model: "gemma4:e4b-it",
       status: "completed",
       createdAt: new Date().toISOString(),
       reviewStatus: "not_required"
@@ -414,7 +414,7 @@ export const mockPreparedSosSubmission: PreparedSosSubmission = {
     audit: {
       id: "ai-audit-7",
       action: "prepareSosSubmission",
-      model: "gemini-2.5-flash",
+      model: "gemma4:e4b-it",
       status: "completed",
       createdAt: new Date().toISOString(),
       reviewStatus: "pending_review"
