@@ -292,6 +292,78 @@ export type EmergencySyncPackage = {
   changedSinceLastSync: boolean;
 };
 
+export type OfflineSosQueueItem = {
+  id: string;
+  localId: string;
+  senderId?: string | null;
+  payload: string;
+  status: string;
+  createdOfflineAt?: string | null;
+  syncedAt?: string | null;
+};
+
+export type OfflineSosSyncResult = {
+  queued: number;
+  synced: number;
+  items: OfflineSosQueueItem[];
+};
+
+export type GemmaModelStatus = {
+  provider: string;
+  runtime: string;
+  endpoint?: string | null;
+  interactiveModel: string;
+  analysisModel: string;
+  mode: string;
+  cloudFallbackAllowed: boolean;
+  adapterVersion: string;
+  offlineCapable: boolean;
+};
+
+export type GemmaModelRun = {
+  id: string;
+  action: string;
+  modelName: string;
+  modelVersion?: string | null;
+  adapterVersion?: string | null;
+  runtime?: string | null;
+  offlineMode?: boolean | null;
+  dataFreshnessMinutes?: number | null;
+  status?: string | null;
+  confidence?: number | null;
+  createdAt: string;
+};
+
+export type GemmaAuditDashboard = {
+  totalRuns: number;
+  completedRuns: number;
+  failedRuns: number;
+  averageConfidence?: number | null;
+  latestRuns: GemmaModelRun[];
+  latestAudits: AiAuditRef[];
+};
+
+export type GemmaEvalResult = {
+  id: string;
+  modelName: string;
+  adapterVersion?: string | null;
+  evalSuite: string;
+  jsonValidRate?: number | null;
+  safetyPassRate?: number | null;
+  hallucinationRate?: number | null;
+  multilingualScore?: number | null;
+  createdAt: string;
+};
+
+export type OfflineCitizenInsight = {
+  headline: string;
+  nextSteps: string[];
+  warnings: string[];
+  dataFreshnessMinutes?: number | null;
+  groundingSources: string[];
+  requiresHumanApproval: boolean;
+};
+
 export type MapMarker = {
   id: string;
   longitude: number;

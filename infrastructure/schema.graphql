@@ -246,6 +246,78 @@ type EmergencySyncPackage {
   changedSinceLastSync: Boolean!
 }
 
+type OfflineSosQueueItem {
+  id: ID!
+  localId: String!
+  senderId: String
+  payload: AWSJSON!
+  status: String!
+  createdOfflineAt: String
+  syncedAt: String
+}
+
+type OfflineSosSyncResult {
+  queued: Int!
+  synced: Int!
+  items: [OfflineSosQueueItem!]!
+}
+
+type GemmaModelStatus {
+  provider: String!
+  runtime: String!
+  endpoint: String
+  interactiveModel: String!
+  analysisModel: String!
+  mode: String!
+  cloudFallbackAllowed: Boolean!
+  adapterVersion: String!
+  offlineCapable: Boolean!
+}
+
+type GemmaAuditDashboard {
+  totalRuns: Int!
+  completedRuns: Int!
+  failedRuns: Int!
+  averageConfidence: Float
+  latestRuns: [GemmaModelRun!]!
+  latestAudits: [AiAuditRef!]!
+}
+
+type GemmaModelRun {
+  id: ID!
+  action: String!
+  modelName: String!
+  modelVersion: String
+  adapterVersion: String
+  runtime: String
+  offlineMode: Boolean
+  dataFreshnessMinutes: Int
+  status: String
+  confidence: Float
+  createdAt: String!
+}
+
+type GemmaEvalResult {
+  id: ID!
+  modelName: String!
+  adapterVersion: String
+  evalSuite: String!
+  jsonValidRate: Float
+  safetyPassRate: Float
+  hallucinationRate: Float
+  multilingualScore: Float
+  createdAt: String!
+}
+
+type OfflineCitizenInsight {
+  headline: String!
+  nextSteps: [String!]!
+  warnings: [String!]!
+  dataFreshnessMinutes: Int
+  groundingSources: [String!]!
+  requiresHumanApproval: Boolean!
+}
+
 type Query {
   getDisasters(status: String): [Disaster!]!
   getDisaster(id: ID!): Disaster
@@ -263,6 +335,8 @@ type Query {
   getCitizenGuidance(disasterId: ID): CitizenGuidance
   getAiAuditLogs(limit: Int): [AiAuditRef!]!
   getEmergencySyncPackage(input: EmergencySyncInput!): EmergencySyncPackage!
+  getGemmaModelStatus: GemmaModelStatus!
+  getGemmaAuditDashboard(limit: Int): GemmaAuditDashboard!
 }
 
 type Mutation {
@@ -288,6 +362,11 @@ type Mutation {
   recommendResourceDispatch(id: ID!): ResourceDispatchPlan!
   prepareSosSubmission(input: AiPrepareSosInput!): PreparedSosSubmission!
   reviewAiAuditLog(id: ID!, approved: Boolean!): AiAuditRef!
+  publishEmergencySyncPackage(input: EmergencySyncPackageInput!): EmergencySyncPackage!
+  queueOfflineSos(input: OfflineSosInput!): OfflineSosQueueItem!
+  syncOfflineSosQueue(items: [OfflineSosInput!]!): OfflineSosSyncResult!
+  evaluateGemmaOutput(input: GemmaEvalInput!): GemmaEvalResult!
+  generateOfflineCitizenInsight(input: OfflineInsightInput!): OfflineCitizenInsight!
 }
 
 type Subscription {
@@ -391,4 +470,37 @@ input EmergencySyncInput {
   minZoom: Int
   maxZoom: Int
   lastSyncAt: String
+}
+
+input EmergencySyncPackageInput {
+  lat: Float!
+  lon: Float!
+  radiusKm: Float!
+  minZoom: Int
+  maxZoom: Int
+  lastSyncAt: String
+}
+
+input OfflineSosInput {
+  localId: String!
+  payload: AWSJSON!
+  createdOfflineAt: String
+}
+
+input GemmaEvalInput {
+  modelName: String!
+  adapterVersion: String
+  evalSuite: String!
+  jsonValidRate: Float
+  safetyPassRate: Float
+  hallucinationRate: Float
+  multilingualScore: Float
+}
+
+input OfflineInsightInput {
+  packageChecksum: String
+  packageJson: AWSJSON!
+  lat: Float
+  lon: Float
+  language: String
 }

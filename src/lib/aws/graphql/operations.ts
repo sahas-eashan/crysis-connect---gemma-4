@@ -255,6 +255,52 @@ export const queries = {
         changedSinceLastSync
       }
     }
+  `,
+  getGemmaModelStatus: /* GraphQL */ `
+    query GetGemmaModelStatus {
+      getGemmaModelStatus {
+        provider
+        runtime
+        endpoint
+        interactiveModel
+        analysisModel
+        mode
+        cloudFallbackAllowed
+        adapterVersion
+        offlineCapable
+      }
+    }
+  `,
+  getGemmaAuditDashboard: /* GraphQL */ `
+    query GetGemmaAuditDashboard($limit: Int) {
+      getGemmaAuditDashboard(limit: $limit) {
+        totalRuns
+        completedRuns
+        failedRuns
+        averageConfidence
+        latestRuns {
+          id
+          action
+          modelName
+          modelVersion
+          adapterVersion
+          runtime
+          offlineMode
+          dataFreshnessMinutes
+          status
+          confidence
+          createdAt
+        }
+        latestAudits {
+          id
+          action
+          model
+          status
+          createdAt
+          reviewStatus
+        }
+      }
+    }
   `
 };
 
@@ -697,6 +743,79 @@ export const mutations = {
         status
         createdAt
         reviewStatus
+      }
+    }
+  `,
+  publishEmergencySyncPackage: /* GraphQL */ `
+    mutation PublishEmergencySyncPackage($input: EmergencySyncPackageInput!) {
+      publishEmergencySyncPackage(input: $input) {
+        id
+        generatedAt
+        validUntil
+        checksum
+        version
+        center
+        radiusKm
+        bounds
+        packageJson
+        changedSinceLastSync
+      }
+    }
+  `,
+  queueOfflineSos: /* GraphQL */ `
+    mutation QueueOfflineSos($input: OfflineSosInput!) {
+      queueOfflineSos(input: $input) {
+        id
+        localId
+        senderId
+        payload
+        status
+        createdOfflineAt
+        syncedAt
+      }
+    }
+  `,
+  syncOfflineSosQueue: /* GraphQL */ `
+    mutation SyncOfflineSosQueue($items: [OfflineSosInput!]!) {
+      syncOfflineSosQueue(items: $items) {
+        queued
+        synced
+        items {
+          id
+          localId
+          senderId
+          payload
+          status
+          createdOfflineAt
+          syncedAt
+        }
+      }
+    }
+  `,
+  evaluateGemmaOutput: /* GraphQL */ `
+    mutation EvaluateGemmaOutput($input: GemmaEvalInput!) {
+      evaluateGemmaOutput(input: $input) {
+        id
+        modelName
+        adapterVersion
+        evalSuite
+        jsonValidRate
+        safetyPassRate
+        hallucinationRate
+        multilingualScore
+        createdAt
+      }
+    }
+  `,
+  generateOfflineCitizenInsight: /* GraphQL */ `
+    mutation GenerateOfflineCitizenInsight($input: OfflineInsightInput!) {
+      generateOfflineCitizenInsight(input: $input) {
+        headline
+        nextSteps
+        warnings
+        dataFreshnessMinutes
+        groundingSources
+        requiresHumanApproval
       }
     }
   `

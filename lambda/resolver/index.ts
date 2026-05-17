@@ -390,6 +390,69 @@ function mapOrganization(row: Record<string, any>) {
   };
 }
 
+function mapOfflineSosQueueItem(row: Record<string, any>) {
+  return {
+    id: row.id,
+    localId: row.local_id,
+    senderId: row.sender_id,
+    payload: JSON.stringify(row.payload ?? {}),
+    status: row.status,
+    createdOfflineAt: row.created_offline_at?.toISOString?.() ?? row.created_offline_at,
+    syncedAt: row.synced_at?.toISOString?.() ?? row.synced_at
+  };
+}
+
+function mapGemmaModelRun(row: Record<string, any>) {
+  return {
+    id: row.id,
+    action: row.action,
+    modelName: row.model_name,
+    modelVersion: row.model_version,
+    adapterVersion: row.adapter_version,
+    runtime: row.runtime,
+    offlineMode: row.offline_mode,
+    dataFreshnessMinutes: row.data_freshness_minutes,
+    status: row.status,
+    confidence: row.confidence == null ? null : Number(row.confidence),
+    createdAt: row.created_at?.toISOString?.() ?? row.created_at
+  };
+}
+
+function mapGemmaEvalResult(row: Record<string, any>) {
+  return {
+    id: row.id,
+    modelName: row.model_name,
+    adapterVersion: row.adapter_version,
+    evalSuite: row.eval_suite,
+    jsonValidRate: row.json_valid_rate == null ? null : Number(row.json_valid_rate),
+    safetyPassRate: row.safety_pass_rate == null ? null : Number(row.safety_pass_rate),
+    hallucinationRate: row.hallucination_rate == null ? null : Number(row.hallucination_rate),
+    multilingualScore: row.multilingual_score == null ? null : Number(row.multilingual_score),
+    createdAt: row.created_at?.toISOString?.() ?? row.created_at
+  };
+}
+
+function mapAiAuditRef(row: Record<string, any>) {
+  return {
+    id: row.id,
+    action: row.action,
+    model: row.model,
+    status: row.status,
+    createdAt: row.created_at?.toISOString?.() ?? row.created_at,
+    reviewStatus: row.review_status
+  };
+}
+
+function parseAwsJson(value: unknown) {
+  if (typeof value === "string") return JSON.parse(value);
+  if (value && typeof value === "object") return value;
+  return {};
+}
+
+function hashObject(value: unknown) {
+  return createHash("sha256").update(stableJson(value)).digest("hex");
+}
+
 async function triggerWorker(payload: Record<string, any>) {
   const functionName = process.env.WORKER_FUNCTION_NAME;
   if (!functionName) return;
@@ -591,7 +654,49 @@ export async function handler(event: AppSyncEvent) {
         totalUsers: users.rows[0]?.count ?? 0
       };
     }
+    case "getGemmaModelStatus": {
+      return {
+        provider: process.env.AI_PROVIDER ?? "gemma",
+        runtime: process.env.GEMMA_RUNTIME ?? "ollama",
+        endpoint: process.env.GEMMA_ENDPOINT ?? null,
+        interactiveModel: process.env.GEMMA_INTERACTIVE_MODEL ?? "gemma4:e4b-it",
+        analysisModel: process.env.GEMMA_ANALYSIS_MODEL ?? "gemma4:26b-it",
+        mode: process.env.GEMMA_MODE ?? "local_first",
+        cloudFallbackAllowed: (process.env.AI_ALLOW_CLOUD_FALLBACK ?? "false").toLowerCase() === "true",
+        adapterVersion: "resolver-module-hij-v1",
+        offlineCapable: true
+      };
+    }
+    case "getGemmaAuditDashboard": {
+      requireGroup(event, ["government"]);
+      const limit = Math.max(1, Math.min(100, Number(args.limit ?? 20)));
+      const [stats, runs, audits] = await Promise.all([
+        pool.query(
+          `SELECT COUNT(*)::int AS total_runs,
+                  COUNT(*) FILTER (WHERE status = 'completed')::int AS completed_runs,
+                  COUNT(*) FILTER (WHERE status <> 'completed')::int AS failed_runs,
+                  AVG(confidence)::float AS average_confidence
+           FROM gemma_model_runs`
+        ),
+        pool.query(`SELECT * FROM gemma_model_runs ORDER BY created_at DESC LIMIT $1`, [limit]),
+        pool.query(`SELECT id, action, model, status, review_status, created_at FROM ai_audit_logs ORDER BY created_at DESC LIMIT $1`, [
+          limit
+        ])
+      ]);
+      return {
+        totalRuns: stats.rows[0]?.total_runs ?? 0,
+        completedRuns: stats.rows[0]?.completed_runs ?? 0,
+        failedRuns: stats.rows[0]?.failed_runs ?? 0,
+        averageConfidence: stats.rows[0]?.average_confidence ?? null,
+        latestRuns: runs.rows.map(mapGemmaModelRun),
+        latestAudits: audits.rows.map(mapAiAuditRef)
+      };
+    }
+    case "publishEmergencySyncPackage":
     case "getEmergencySyncPackage": {
+      if (event.info.fieldName === "publishEmergencySyncPackage") {
+        requireGroup(event, ["government"]);
+      }
       const input = validateEmergencySyncInput(args.input);
       const bounds = buildBounds(input.lat, input.lon, input.radiusKm);
       const tileManifest = buildTileManifest(bounds, input.minZoom, input.maxZoom);
@@ -1116,6 +1221,79 @@ export async function handler(event: AppSyncEvent) {
         client.release();
       }
     }
+    case "queueOfflineSos": {
+      const input = args.input;
+      const payload = parseAwsJson(input.payload);
+      const { rows } = await pool.query(
+        `INSERT INTO offline_sos_queue (local_id, sender_id, payload, status, created_offline_at)
+         VALUES ($1, $2, $3::jsonb, 'queued', $4)
+         ON CONFLICT (sender_id, local_id) DO UPDATE
+         SET payload = EXCLUDED.payload,
+             status = 'queued',
+             created_offline_at = EXCLUDED.created_offline_at
+         RETURNING *`,
+        [input.localId, userId, JSON.stringify(payload), input.createdOfflineAt ?? null]
+      );
+      return mapOfflineSosQueueItem(rows[0]);
+    }
+    case "syncOfflineSosQueue": {
+      const items = Array.isArray(args.items) ? args.items : [];
+      const syncedItems = [];
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        for (const item of items) {
+          const payload = parseAwsJson(item.payload);
+          const sosType = String((payload as any).type ?? (payload as any).incidentType ?? "offline_sos");
+          const description = String(
+            (payload as any).description ??
+              (payload as any).refinedMessage ??
+              (payload as any).responderMessage ??
+              "Offline SOS synced from device."
+          );
+          const location = typeof (payload as any).location === "string" ? (payload as any).location : null;
+          const disasterId = typeof (payload as any).disasterId === "string" ? (payload as any).disasterId : null;
+
+          if (location) {
+            await client.query(
+              `INSERT INTO sos_signals (sender_id, location, type, description, status, disaster_id)
+               VALUES (
+                 $1,
+                 ST_SetSRID(ST_GeomFromGeoJSON($2), 4326)::geography,
+                 $3,
+                 $4,
+                 'pending',
+                 $5
+               )`,
+              [userId, location, sosType, description, disasterId]
+            );
+          }
+
+          const queued = await client.query(
+            `INSERT INTO offline_sos_queue (local_id, sender_id, payload, status, created_offline_at, synced_at)
+             VALUES ($1, $2, $3::jsonb, 'synced', $4, now())
+             ON CONFLICT (sender_id, local_id) DO UPDATE
+             SET payload = EXCLUDED.payload,
+                 status = 'synced',
+                 synced_at = now()
+             RETURNING *`,
+            [item.localId, userId, JSON.stringify(payload), item.createdOfflineAt ?? null]
+          );
+          syncedItems.push(mapOfflineSosQueueItem(queued.rows[0]));
+        }
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+      return {
+        queued: 0,
+        synced: syncedItems.length,
+        items: syncedItems
+      };
+    }
     case "acceptSOS": {
       requireGroup(event, ["ngo", "government"]);
       const { rows } = await pool.query(
@@ -1192,6 +1370,74 @@ export async function handler(event: AppSyncEvent) {
         [args.id, status, userId]
       );
       return mapOrganization(rows[0]);
+    }
+    case "evaluateGemmaOutput": {
+      requireGroup(event, ["government"]);
+      const input = args.input;
+      const { rows } = await pool.query(
+        `INSERT INTO gemma_eval_results
+           (model_name, adapter_version, eval_suite, json_valid_rate, safety_pass_rate, hallucination_rate, multilingual_score)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING *`,
+        [
+          input.modelName,
+          input.adapterVersion ?? null,
+          input.evalSuite,
+          input.jsonValidRate ?? null,
+          input.safetyPassRate ?? null,
+          input.hallucinationRate ?? null,
+          input.multilingualScore ?? null
+        ]
+      );
+      return mapGemmaEvalResult(rows[0]);
+    }
+    case "generateOfflineCitizenInsight": {
+      const input = args.input;
+      const packageJson = parseAwsJson(input.packageJson);
+      const freshness = (packageJson as any).freshness ?? {};
+      const safeZones = Array.isArray((packageJson as any).safeZones) ? (packageJson as any).safeZones : [];
+      const alerts = Array.isArray((packageJson as any).publicAlerts) ? (packageJson as any).publicAlerts : [];
+      const disasters = Array.isArray((packageJson as any).disasters) ? (packageJson as any).disasters : [];
+      const nearestSafeZone = safeZones[0];
+      const warnings = [
+        freshness.staleWarning ?? "Offline data may be outdated. Follow official instructions when available.",
+        input.packageChecksum ? null : "Package checksum was not provided by the client."
+      ].filter((item): item is string => Boolean(item));
+
+      await pool.query(
+        `INSERT INTO gemma_model_runs
+           (action, model_name, adapter_version, runtime, offline_mode, data_freshness_minutes, input_hash, output_hash, status, confidence)
+         VALUES ($1, $2, $3, $4, true, $5, $6, $7, 'completed', $8)`,
+        [
+          "generateOfflineCitizenInsight",
+          process.env.GEMMA_INTERACTIVE_MODEL ?? "gemma4:e4b-it",
+          "resolver-module-hij-v1",
+          "edge_gateway",
+          freshness.dataFreshnessMinutes ?? null,
+          hashObject({ checksum: input.packageChecksum, lat: input.lat, lon: input.lon }),
+          hashObject(packageJson),
+          0.72
+        ]
+      );
+
+      return {
+        headline: disasters[0]?.title ? `Offline guidance for ${disasters[0].title}` : "Offline emergency guidance",
+        nextSteps: [
+          nearestSafeZone
+            ? `Use cached verified data for ${nearestSafeZone.name}; travel only if the route is visibly safe.`
+            : "No cached safe zone is available in this package.",
+          alerts[0]?.body ? `Review latest cached alert: ${alerts[0].body}` : "Check official alerts when connectivity returns.",
+          "Keep SOS details concise and include GPS if you need help."
+        ],
+        warnings,
+        dataFreshnessMinutes: freshness.dataFreshnessMinutes ?? null,
+        groundingSources: [
+          `${disasters.length} cached disaster record(s)`,
+          `${safeZones.length} cached safe zone(s)`,
+          `${alerts.length} cached alert(s)`
+        ],
+        requiresHumanApproval: false
+      };
     }
     default:
       throw new Error(`Unknown field: ${event.info.fieldName}`);

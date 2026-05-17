@@ -6,6 +6,9 @@ import { Download, MapPinned, RefreshCw, ShieldCheck, TriangleAlert } from "luci
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { DataFreshnessBanner } from "@/components/citizen/DataFreshnessBanner";
+import { GemmaOfflineAdvisor } from "@/components/citizen/GemmaOfflineAdvisor";
+import { SosDraftAssistant } from "@/components/citizen/SosDraftAssistant";
 import {
   activeCachedDisastersAt,
   downloadEmergencySyncPackage,
@@ -48,6 +51,9 @@ export default function CitizenOfflinePage() {
   const stale = isPackageStale(pkg);
   const nearest = location ? nearestCachedSafeZone(pkg, location.lat, location.lon) : null;
   const activeDisasters = location ? activeCachedDisastersAt(pkg, location.lat, location.lon) : [];
+  const gpsPoint = location
+    ? JSON.stringify({ type: "Point", coordinates: [location.lon, location.lat] })
+    : null;
 
   async function syncPackage() {
     if (!location) {
@@ -81,9 +87,9 @@ export default function CitizenOfflinePage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Offline Emergency Sync</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-white">Gemma Offline Advisor</h1>
           <p className="mt-2 max-w-3xl text-sm text-muted">
-            Cache verified disaster data, safe zones, resources, alerts, and map tiles before the network becomes unreliable.
+            Cache verified disaster data, safe zones, resources, alerts, and map tiles, then use Gemma 4 local guidance when the network becomes unreliable.
           </p>
         </div>
         <Button onClick={syncPackage} disabled={loading}>
@@ -95,6 +101,8 @@ export default function CitizenOfflinePage() {
       <div className="rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-slate-100">
         {status}
       </div>
+
+      <DataFreshnessBanner pkg={pkg} />
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
@@ -145,6 +153,11 @@ export default function CitizenOfflinePage() {
             ))}
           </div>
         </Card>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <GemmaOfflineAdvisor pkg={pkg} lat={location?.lat} lon={location?.lon} />
+        <SosDraftAssistant pkg={pkg} location={gpsPoint} />
       </div>
 
       {pkg ? (

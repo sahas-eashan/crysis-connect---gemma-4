@@ -101,6 +101,8 @@ Copy `.env.example` to `.env.local` and fill in the Terraform outputs after prov
 
 For local Gemma 4 development, keep `AI_PROVIDER=gemma`, `GEMMA_RUNTIME=ollama`, and set `GEMMA_ENDPOINT=http://localhost:11434`. For deployed AWS Lambda, `GEMMA_ENDPOINT` must point to a reachable Gemma gateway or hosted endpoint; Lambda `localhost` is the Lambda sandbox, not your development machine.
 
+The citizen web offline advisor also calls a local Gemma endpoint from the browser. Set `NEXT_PUBLIC_GEMMA_ENDPOINT=http://localhost:11434` and `NEXT_PUBLIC_GEMMA_MODEL=gemma4:e4b` for the Module E demo; if Ollama is unavailable, the page falls back to deterministic cached-data guidance.
+
 Emergency sync packages can include offline map tile manifests for bounded disaster areas. The default local/demo template is `https://tile.openstreetmap.org/{z}/{x}/{y}.png`; production deployments should use an owned, cached, or otherwise approved tile service instead of bulk-downloading public OSM tiles.
 
 ### 3. Provision infrastructure
@@ -120,6 +122,7 @@ terraform apply
 It executes:
 
 - `db/migrations/001_schema.sql`
+- `db/migrations/002_gemma_offline_intelligence.sql`
 - `db/seed.sql`
 
 through `scripts/bootstrap-db.mjs`.
@@ -128,6 +131,7 @@ Manual fallback is still available:
 
 ```bash
 node scripts/run-sql.mjs db/migrations/001_schema.sql
+node scripts/run-sql.mjs db/migrations/002_gemma_offline_intelligence.sql
 node scripts/run-sql.mjs db/seed.sql
 ```
 

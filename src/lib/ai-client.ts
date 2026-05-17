@@ -8,6 +8,8 @@ import type {
   AiAuditRef,
   AlertDraft,
   CitizenGuidance,
+  GemmaAuditDashboard,
+  GemmaModelStatus,
   IncidentBrief,
   OperationsRecommendationSet,
   PreparedSosSubmission,
@@ -140,6 +142,30 @@ export async function getAiAuditLogs(limit = 20) {
     },
     5_000
   );
+}
+
+export async function getGemmaModelStatus() {
+  return runCached("getGemmaModelStatus", async () => {
+    const result = await runGraphql({
+      query: queries.getGemmaModelStatus
+    });
+
+    return requirePayload(result?.data?.getGemmaModelStatus as GemmaModelStatus | null | undefined, "Gemma model status");
+  }, 5_000);
+}
+
+export async function getGemmaAuditDashboard(limit = 20) {
+  return runCached(`getGemmaAuditDashboard:${limit}`, async () => {
+    const result = await runGraphql({
+      query: queries.getGemmaAuditDashboard,
+      variables: { limit }
+    });
+
+    return requirePayload(
+      result?.data?.getGemmaAuditDashboard as GemmaAuditDashboard | null | undefined,
+      "Gemma audit dashboard"
+    );
+  }, 5_000);
 }
 
 export async function reviewAiAuditLog(id: string, approved: boolean) {

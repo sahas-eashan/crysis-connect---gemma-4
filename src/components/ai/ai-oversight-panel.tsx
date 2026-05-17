@@ -48,7 +48,7 @@ export function AiOversightPanel() {
     <Card>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <Badge className="border-primary/40 bg-primary/10 text-primary">AI oversight</Badge>
+          <Badge className="border-primary/40 bg-primary/10 text-primary">Gemma safety oversight</Badge>
           <CardTitle className="mt-3 flex items-center gap-2">
             <Activity className="h-5 w-5 text-primary" />
             Audit and review trail
@@ -59,7 +59,7 @@ export function AiOversightPanel() {
         </Button>
       </div>
 
-      {loading ? <p className="mt-4 text-sm text-muted">Loading AI audit events...</p> : null}
+      {loading ? <p className="mt-4 text-sm text-muted">Loading Gemma audit events...</p> : null}
       {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
 
       <div className="mt-6 space-y-3">
