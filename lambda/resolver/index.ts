@@ -1,4 +1,5 @@
 import { InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
+import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 
 type AppSyncEvent = {
@@ -30,6 +31,149 @@ const lambdaClient = new LambdaClient({});
 type DbClient = {
   query: (text: string, values?: any[]) => Promise<{ rows: Record<string, any>[] }>;
 };
+
+const MAX_SYNC_RADIUS_KM = 25;
+const MAX_SYNC_TILE_COUNT = 800;
+const DEFAULT_SYNC_VALID_HOURS = 6;
+const DEFAULT_TILE_URL_TEMPLATE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const TILE_URL_TEMPLATE = process.env.OFFLINE_TILE_URL_TEMPLATE ?? DEFAULT_TILE_URL_TEMPLATE;
+const TILE_MIN_ZOOM = Number(process.env.OFFLINE_TILE_MIN_ZOOM ?? 12);
+const TILE_MAX_ZOOM = Number(process.env.OFFLINE_TILE_MAX_ZOOM ?? 15);
+
+type EmergencySyncInput = {
+  lat: number;
+  lon: number;
+  radiusKm: number;
+  minZoom?: number | null;
+  maxZoom?: number | null;
+  lastSyncAt?: string | null;
+};
+
+function clampZoom(value: unknown, fallback: number) {
+  const numeric = Number(value ?? fallback);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.trunc(numeric);
+}
+
+function validateEmergencySyncInput(rawInput: any): EmergencySyncInput & { minZoom: number; maxZoom: number } {
+  const input = rawInput ?? {};
+  const lat = Number(input.lat);
+  const lon = Number(input.lon);
+  const radiusKm = Number(input.radiusKm);
+  const minZoom = clampZoom(input.minZoom, TILE_MIN_ZOOM);
+  const maxZoom = clampZoom(input.maxZoom, TILE_MAX_ZOOM);
+
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+    throw new Error("Emergency sync latitude must be between -90 and 90.");
+  }
+  if (!Number.isFinite(lon) || lon < -180 || lon > 180) {
+    throw new Error("Emergency sync longitude must be between -180 and 180.");
+  }
+  if (!Number.isFinite(radiusKm) || radiusKm <= 0 || radiusKm > MAX_SYNC_RADIUS_KM) {
+    throw new Error(`Emergency sync radius must be greater than 0 and no more than ${MAX_SYNC_RADIUS_KM}km.`);
+  }
+  if (minZoom < 10 || maxZoom > 16 || minZoom > maxZoom) {
+    throw new Error("Emergency sync zoom range must stay within 10-16 and minZoom must be <= maxZoom.");
+  }
+
+  return {
+    lat,
+    lon,
+    radiusKm,
+    minZoom,
+    maxZoom,
+    lastSyncAt: typeof input.lastSyncAt === "string" ? input.lastSyncAt : null
+  };
+}
+
+function buildBounds(lat: number, lon: number, radiusKm: number) {
+  const latDelta = radiusKm / 111.32;
+  const lonDelta = radiusKm / (111.32 * Math.cos((lat * Math.PI) / 180) || 1);
+  return {
+    minLat: Math.max(-90, lat - latDelta),
+    maxLat: Math.min(90, lat + latDelta),
+    minLon: Math.max(-180, lon - lonDelta),
+    maxLon: Math.min(180, lon + lonDelta)
+  };
+}
+
+function lonToTileX(lon: number, zoom: number) {
+  return Math.floor(((lon + 180) / 360) * 2 ** zoom);
+}
+
+function latToTileY(lat: number, zoom: number) {
+  const rad = (lat * Math.PI) / 180;
+  return Math.floor(((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * 2 ** zoom);
+}
+
+function buildTileManifest(bounds: ReturnType<typeof buildBounds>, minZoom: number, maxZoom: number) {
+  const tiles: Array<{ z: number; x: number; y: number; url: string }> = [];
+
+  for (let z = minZoom; z <= maxZoom; z += 1) {
+    const maxIndex = 2 ** z - 1;
+    const minX = Math.max(0, Math.min(maxIndex, lonToTileX(bounds.minLon, z)));
+    const maxX = Math.max(0, Math.min(maxIndex, lonToTileX(bounds.maxLon, z)));
+    const minY = Math.max(0, Math.min(maxIndex, latToTileY(bounds.maxLat, z)));
+    const maxY = Math.max(0, Math.min(maxIndex, latToTileY(bounds.minLat, z)));
+
+    for (let x = Math.min(minX, maxX); x <= Math.max(minX, maxX); x += 1) {
+      for (let y = Math.min(minY, maxY); y <= Math.max(minY, maxY); y += 1) {
+        tiles.push({
+          z,
+          x,
+          y,
+          url: TILE_URL_TEMPLATE.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y))
+        });
+      }
+    }
+  }
+
+  if (tiles.length > MAX_SYNC_TILE_COUNT) {
+    throw new Error(
+      `Emergency sync package would require ${tiles.length} map tiles. Reduce radius or zoom range to stay under ${MAX_SYNC_TILE_COUNT}.`
+    );
+  }
+
+  return {
+    template: TILE_URL_TEMPLATE,
+    minZoom,
+    maxZoom,
+    count: tiles.length,
+    tiles
+  };
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJson).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function checksum(value: unknown) {
+  return createHash("sha256").update(stableJson(value)).digest("hex");
+}
+
+function mapEmergencySyncPackage(row: Record<string, any>, changedSinceLastSync: boolean) {
+  return {
+    id: row.id,
+    generatedAt: row.generated_at?.toISOString?.() ?? row.generated_at,
+    validUntil: row.valid_until?.toISOString?.() ?? row.valid_until,
+    checksum: row.checksum,
+    version: row.version ?? 1,
+    center: row.center,
+    radiusKm: Number(row.radius_km),
+    bounds: JSON.stringify(row.bounds ?? {}),
+    packageJson: JSON.stringify(row.package_json ?? {}),
+    changedSinceLastSync
+  };
+}
 
 function getGroups(event: AppSyncEvent) {
   const rawGroups = event.identity?.claims?.["cognito:groups"];
@@ -446,6 +590,173 @@ export async function handler(event: AppSyncEvent) {
         totalSafeZones: safeZones.rows[0]?.count ?? 0,
         totalUsers: users.rows[0]?.count ?? 0
       };
+    }
+    case "getEmergencySyncPackage": {
+      const input = validateEmergencySyncInput(args.input);
+      const bounds = buildBounds(input.lat, input.lon, input.radiusKm);
+      const tileManifest = buildTileManifest(bounds, input.minZoom, input.maxZoom);
+      const centerGeoJson = {
+        type: "Point",
+        coordinates: [input.lon, input.lat]
+      };
+      const radiusMeters = input.radiusKm * 1000;
+
+      const disastersResult = await pool.query(
+        `SELECT *, ST_AsGeoJSON(affected_area) AS affected_area, ST_AsGeoJSON(center_point) AS center_point
+         FROM disasters
+         WHERE status = 'active'
+           AND (
+             (center_point IS NOT NULL AND ST_DWithin(center_point, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3))
+             OR (affected_area IS NOT NULL AND ST_DWithin(affected_area, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3))
+           )
+         ORDER BY created_at DESC`,
+        [input.lon, input.lat, radiusMeters]
+      );
+      const disasters = disastersResult.rows.map(mapDisaster);
+      const disasterIds = disasters.map((item) => item.id);
+
+      const safeZonesResult = await pool.query(
+        `SELECT *, ST_AsGeoJSON(location) AS location, ST_AsGeoJSON(boundary) AS boundary
+         FROM safe_zones
+         WHERE status = 'active'
+           AND (
+             (location IS NOT NULL AND ST_DWithin(location, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3))
+             OR (boundary IS NOT NULL AND ST_DWithin(boundary, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3))
+             OR (disaster_id = ANY($4::uuid[]))
+           )
+         ORDER BY created_at DESC`,
+        [input.lon, input.lat, radiusMeters, disasterIds]
+      );
+
+      const resourcesResult = await pool.query(
+        `SELECT *, ST_AsGeoJSON(location) AS location
+         FROM resources
+         WHERE (
+             (location IS NOT NULL AND ST_DWithin(location, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3))
+             OR (disaster_id = ANY($4::uuid[]))
+           )
+         ORDER BY created_at DESC`,
+        [input.lon, input.lat, radiusMeters, disasterIds]
+      );
+
+      const role = getProfileRole(event);
+      const alertsResult = await pool.query(
+        `SELECT *, ST_AsGeoJSON(target_area) AS target_area
+         FROM notifications
+         WHERE (
+             (target_area IS NOT NULL AND ST_DWithin(target_area, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3))
+             OR (disaster_id = ANY($4::uuid[]))
+           )
+           AND (
+             target_roles IS NULL
+             OR cardinality(target_roles) = 0
+             OR $5::text = ANY(target_roles::text[])
+           )
+         ORDER BY created_at DESC`,
+        [input.lon, input.lat, radiusMeters, disasterIds, role]
+      );
+
+      const newsResult = await pool.query(
+        `SELECT *
+         FROM news_updates
+         WHERE ($1::uuid[] = '{}'::uuid[] OR disaster_id = ANY($1::uuid[]))
+         ORDER BY created_at DESC
+         LIMIT 50`,
+        [disasterIds]
+      );
+
+      const latestResult = await pool.query(
+        `SELECT MAX(source_time) AS latest_at
+         FROM (
+           SELECT created_at AS source_time FROM disasters WHERE id = ANY($1::uuid[])
+           UNION ALL
+           SELECT created_at AS source_time FROM safe_zones WHERE id = ANY($2::uuid[])
+           UNION ALL
+           SELECT created_at AS source_time FROM resources WHERE id = ANY($3::uuid[])
+           UNION ALL
+           SELECT created_at AS source_time FROM notifications WHERE id = ANY($4::uuid[])
+           UNION ALL
+           SELECT created_at AS source_time FROM news_updates WHERE id = ANY($5::uuid[])
+         ) sources`,
+        [
+          disasterIds,
+          safeZonesResult.rows.map((row) => row.id),
+          resourcesResult.rows.map((row) => row.id),
+          alertsResult.rows.map((row) => row.id),
+          newsResult.rows.map((row) => row.id)
+        ]
+      );
+
+      const now = new Date();
+      const validUntil = new Date(now.getTime() + DEFAULT_SYNC_VALID_HOURS * 60 * 60 * 1000);
+      const latestAt = latestResult.rows[0]?.latest_at
+        ? new Date(latestResult.rows[0].latest_at).toISOString()
+        : now.toISOString();
+      const lastSyncTime = input.lastSyncAt ? Date.parse(input.lastSyncAt) : NaN;
+      const changedSinceLastSync = !Number.isFinite(lastSyncTime) || Date.parse(latestAt) > lastSyncTime;
+
+      const packageJson = {
+        generatedAt: now.toISOString(),
+        validUntil: validUntil.toISOString(),
+        center: centerGeoJson,
+        radiusKm: input.radiusKm,
+        bounds,
+        freshness: {
+          sourceLatestAt: latestAt,
+          dataFreshnessMinutes: Math.max(0, Math.round((now.getTime() - Date.parse(latestAt)) / 60000)),
+          stale: now.getTime() > validUntil.getTime(),
+          staleWarning: "Offline data may be outdated. Use this as guidance only. Follow official instructions when available."
+        },
+        disasters,
+        safeZones: safeZonesResult.rows.map(mapSafeZone),
+        resources: resourcesResult.rows.map(mapResource),
+        publicAlerts: alertsResult.rows.map(mapAlert),
+        newsUpdates: newsResult.rows.map(mapNews),
+        emergencyContacts: [
+          { label: "Police emergency", phone: "119" },
+          { label: "Ambulance / fire rescue", phone: "110" },
+          { label: "Disaster Management Centre", phone: "117" }
+        ],
+        riskRules: [
+          "Use cached safe zones only when their status is active and occupancy is below capacity.",
+          "Do not enter flooded roads or damaged buildings unless an official responder instructs you.",
+          "If cached data is stale, treat Gemma guidance as advisory and follow official instructions when available."
+        ],
+        tileManifest
+      };
+      const packageChecksum = checksum(packageJson);
+      const packageId = randomUUID();
+
+      const insert = await pool.query(
+        `INSERT INTO emergency_sync_packages
+           (id, center, radius_km, bounds, package_json, generated_by, generated_at, valid_until, checksum, version)
+         VALUES (
+           $1,
+           ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography,
+           $4,
+           $5::jsonb,
+           $6::jsonb,
+           NULL,
+           $7,
+           $8,
+           $9,
+           1
+         )
+         RETURNING id, ST_AsGeoJSON(center) AS center, radius_km, bounds, package_json, generated_at, valid_until, checksum, version`,
+        [
+          packageId,
+          input.lon,
+          input.lat,
+          input.radiusKm,
+          JSON.stringify(bounds),
+          JSON.stringify(packageJson),
+          now.toISOString(),
+          validUntil.toISOString(),
+          packageChecksum
+        ]
+      );
+
+      return mapEmergencySyncPackage(insert.rows[0], changedSinceLastSync);
     }
     case "createDisaster": {
       requireGroup(event, ["government"]);

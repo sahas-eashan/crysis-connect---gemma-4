@@ -233,6 +233,19 @@ type PreparedSosSubmission {
   translations: AiTranslationSet!
 }
 
+type EmergencySyncPackage {
+  id: ID!
+  generatedAt: String!
+  validUntil: String!
+  checksum: String!
+  version: Int!
+  center: String!
+  radiusKm: Float!
+  bounds: String!
+  packageJson: AWSJSON!
+  changedSinceLastSync: Boolean!
+}
+
 type Query {
   getDisasters(status: String): [Disaster!]!
   getDisaster(id: ID!): Disaster
@@ -249,6 +262,7 @@ type Query {
   getDashboardStats: DashboardStats!
   getCitizenGuidance(disasterId: ID): CitizenGuidance
   getAiAuditLogs(limit: Int): [AiAuditRef!]!
+  getEmergencySyncPackage(input: EmergencySyncInput!): EmergencySyncPackage!
 }
 
 type Mutation {
@@ -368,4 +382,13 @@ input AiAlertDraftInput {
 input AiPrepareSosInput {
   type: String!
   description: String!
+}
+
+input EmergencySyncInput {
+  lat: Float!
+  lon: Float!
+  radiusKm: Float!
+  minZoom: Int
+  maxZoom: Int
+  lastSyncAt: String
 }

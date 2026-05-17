@@ -235,6 +235,63 @@ export type PreparedSosSubmission = {
   translations: AiTranslationSet;
 };
 
+export type EmergencySyncInput = {
+  lat: number;
+  lon: number;
+  radiusKm: number;
+  minZoom?: number | null;
+  maxZoom?: number | null;
+  lastSyncAt?: string | null;
+};
+
+export type EmergencySyncTile = {
+  z: number;
+  x: number;
+  y: number;
+  url: string;
+};
+
+export type EmergencySyncPackageJson = {
+  generatedAt: string;
+  validUntil: string;
+  center: { type: "Point"; coordinates: [number, number] };
+  radiusKm: number;
+  bounds: { minLat: number; maxLat: number; minLon: number; maxLon: number };
+  freshness: {
+    sourceLatestAt: string;
+    dataFreshnessMinutes: number;
+    stale: boolean;
+    staleWarning: string;
+  };
+  disasters: Disaster[];
+  safeZones: SafeZone[];
+  resources: Resource[];
+  publicAlerts: Alert[];
+  newsUpdates: NewsUpdate[];
+  emergencyContacts: { label: string; phone: string }[];
+  riskRules: string[];
+  tileManifest: {
+    template: string;
+    minZoom: number;
+    maxZoom: number;
+    count: number;
+    tiles: EmergencySyncTile[];
+  };
+};
+
+export type EmergencySyncPackage = {
+  id: string;
+  generatedAt: string;
+  validUntil: string;
+  checksum: string;
+  version: number;
+  center: string;
+  radiusKm: number;
+  bounds: string;
+  packageJson: string;
+  changedSinceLastSync: boolean;
+};
+
 export type MapMarker = {
   id: string;
   longitude: number;

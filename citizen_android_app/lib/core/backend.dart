@@ -1,12 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:amplify_api/amplify_api.dart';
 import 'package:amplify_auth_cognito/amplify_auth_cognito.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AppConfig {
   const AppConfig.empty()
@@ -179,6 +183,167 @@ class SosBundle {
 
   final List<SosSignal> signals;
   final LatLng? currentLocation;
+}
+
+List<T> _mapJsonList<T>(
+  dynamic value,
+  T Function(Map<String, dynamic> json) fromJson,
+) {
+  final list = value as List<dynamic>? ?? const [];
+  return list.whereType<Map<String, dynamic>>().map(fromJson).toList();
+}
+
+extension FirstOrNull<T> on List<T> {
+  T? get firstOrNull => isEmpty ? null : first;
+}
+
+class EmergencySyncInput {
+  const EmergencySyncInput({
+    required this.lat,
+    required this.lon,
+    required this.radiusKm,
+    this.minZoom = 12,
+    this.maxZoom = 14,
+    this.lastSyncAt,
+  });
+
+  final double lat;
+  final double lon;
+  final double radiusKm;
+  final int minZoom;
+  final int maxZoom;
+  final String? lastSyncAt;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'lat': lat,
+      'lon': lon,
+      'radiusKm': radiusKm,
+      'minZoom': minZoom,
+      'maxZoom': maxZoom,
+      'lastSyncAt': lastSyncAt,
+    };
+  }
+}
+
+class EmergencySyncPackage {
+  const EmergencySyncPackage({
+    required this.id,
+    required this.generatedAt,
+    required this.validUntil,
+    required this.checksum,
+    required this.version,
+    required this.center,
+    required this.radiusKm,
+    required this.bounds,
+    required this.packageJson,
+    required this.changedSinceLastSync,
+  });
+
+  factory EmergencySyncPackage.fromJson(Map<String, dynamic> json) {
+    return EmergencySyncPackage(
+      id: json['id'] as String? ?? '',
+      generatedAt: json['generatedAt'] as String? ?? '',
+      validUntil: json['validUntil'] as String? ?? '',
+      checksum: json['checksum'] as String? ?? '',
+      version: json['version'] as int? ?? 1,
+      center: json['center'] as String? ?? '',
+      radiusKm: (json['radiusKm'] as num?)?.toDouble() ?? 0,
+      bounds: json['bounds'] as String? ?? '{}',
+      packageJson: json['packageJson'] as String? ?? '{}',
+      changedSinceLastSync: json['changedSinceLastSync'] as bool? ?? true,
+    );
+  }
+
+  final String id;
+  final String generatedAt;
+  final String validUntil;
+  final String checksum;
+  final int version;
+  final String center;
+  final double radiusKm;
+  final String bounds;
+  final String packageJson;
+  final bool changedSinceLastSync;
+
+  EmergencySyncSnapshot get snapshot {
+    final decoded = jsonDecode(packageJson);
+    return EmergencySyncSnapshot.fromJson(
+      decoded is Map<String, dynamic> ? decoded : const {},
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'generatedAt': generatedAt,
+      'validUntil': validUntil,
+      'checksum': checksum,
+      'version': version,
+      'center': center,
+      'radiusKm': radiusKm,
+      'bounds': bounds,
+      'packageJson': packageJson,
+      'changedSinceLastSync': changedSinceLastSync,
+    };
+  }
+}
+
+class EmergencySyncSnapshot {
+  const EmergencySyncSnapshot({
+    required this.generatedAt,
+    required this.validUntil,
+    required this.disasters,
+    required this.safeZones,
+    required this.resources,
+    required this.publicAlerts,
+    required this.newsUpdates,
+    required this.tileUrls,
+    required this.dataFreshnessMinutes,
+    required this.staleWarning,
+  });
+
+  factory EmergencySyncSnapshot.fromJson(Map<String, dynamic> json) {
+    final freshness = json['freshness'] as Map<String, dynamic>? ?? const {};
+    final tileManifest =
+        json['tileManifest'] as Map<String, dynamic>? ?? const {};
+    final tiles = tileManifest['tiles'] as List<dynamic>? ?? const [];
+
+    return EmergencySyncSnapshot(
+      generatedAt: json['generatedAt'] as String? ?? '',
+      validUntil: json['validUntil'] as String? ?? '',
+      disasters: _mapJsonList(json['disasters'], Disaster.fromJson),
+      safeZones: _mapJsonList(json['safeZones'], SafeZone.fromJson),
+      resources: _mapJsonList(json['resources'], ResourceItem.fromJson),
+      publicAlerts: _mapJsonList(json['publicAlerts'], AlertItem.fromJson),
+      newsUpdates: _mapJsonList(json['newsUpdates'], NewsUpdate.fromJson),
+      tileUrls: tiles
+          .whereType<Map<String, dynamic>>()
+          .map((tile) => tile['url'])
+          .whereType<String>()
+          .toList(),
+      dataFreshnessMinutes:
+          freshness['dataFreshnessMinutes'] as int? ?? 0,
+      staleWarning: freshness['staleWarning'] as String? ??
+          'Offline data may be outdated. Follow official instructions when available.',
+    );
+  }
+
+  final String generatedAt;
+  final String validUntil;
+  final List<Disaster> disasters;
+  final List<SafeZone> safeZones;
+  final List<ResourceItem> resources;
+  final List<AlertItem> publicAlerts;
+  final List<NewsUpdate> newsUpdates;
+  final List<String> tileUrls;
+  final int dataFreshnessMinutes;
+  final String staleWarning;
+
+  bool get isStale {
+    final expiry = DateTime.tryParse(validUntil);
+    return expiry == null || DateTime.now().isAfter(expiry);
+  }
 }
 
 class DashboardStats {
@@ -434,6 +599,43 @@ class SosSignal {
   final String? createdAt;
   final String? resolvedAt;
   final List<ProfileSummary> nearestResponders;
+}
+
+class AlertItem {
+  const AlertItem({
+    required this.id,
+    required this.title,
+    required this.body,
+    this.type,
+    this.channel = const [],
+    this.targetArea,
+    this.disasterId,
+    this.createdAt,
+  });
+
+  factory AlertItem.fromJson(Map<String, dynamic> json) {
+    return AlertItem(
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? 'Emergency alert',
+      body: json['body'] as String? ?? '',
+      type: json['type'] as String?,
+      channel: (json['channel'] as List<dynamic>? ?? const [])
+          .map((item) => item.toString())
+          .toList(),
+      targetArea: json['targetArea'] as String?,
+      disasterId: json['disasterId'] as String?,
+      createdAt: json['createdAt'] as String?,
+    );
+  }
+
+  final String id;
+  final String title;
+  final String body;
+  final String? type;
+  final List<String> channel;
+  final String? targetArea;
+  final String? disasterId;
+  final String? createdAt;
 }
 
 class NewsUpdate {
@@ -958,6 +1160,23 @@ class AppGraphQL {
     }
   ''';
 
+  static const getEmergencySyncPackage = '''
+    query GetEmergencySyncPackage(\$input: EmergencySyncInput!) {
+      getEmergencySyncPackage(input: \$input) {
+        id
+        generatedAt
+        validUntil
+        checksum
+        version
+        center
+        radiusKm
+        bounds
+        packageJson
+        changedSinceLastSync
+      }
+    }
+  ''';
+
   static const onNewNews = '''
     subscription OnNewNews {
       onNewNews {
@@ -1272,78 +1491,175 @@ class AmplifyBackend {
   }
 }
 
+class EmergencySyncCache {
+  const EmergencySyncCache();
+
+  static const _metadataKey = 'crisisconnect.emergencySync.metadata';
+
+  Future<EmergencySyncPackage?> loadPackage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_metadataKey);
+    if (raw == null || raw.isEmpty) return null;
+
+    final file = await _packageFile();
+    if (!await file.exists()) return null;
+
+    final metadata = jsonDecode(raw);
+    if (metadata is! Map<String, dynamic>) return null;
+
+    final packageJson = await file.readAsString();
+    return EmergencySyncPackage.fromJson({
+      ...metadata,
+      'packageJson': packageJson,
+    });
+  }
+
+  Future<EmergencySyncPackage> savePackage(EmergencySyncPackage package) async {
+    final prefs = await SharedPreferences.getInstance();
+    final file = await _packageFile();
+    await file.parent.create(recursive: true);
+    await file.writeAsString(package.packageJson);
+
+    final metadata = package.toJson()..remove('packageJson');
+    await prefs.setString(_metadataKey, jsonEncode(metadata));
+    await _cacheTiles(package.snapshot.tileUrls);
+    return package;
+  }
+
+  Future<int> _cacheTiles(List<String> urls) async {
+    final tileRoot = await _tileDirectory();
+    await tileRoot.create(recursive: true);
+
+    var saved = 0;
+    for (final url in urls) {
+      try {
+        final uri = Uri.parse(url);
+        final segments = uri.pathSegments;
+        if (segments.length < 3) continue;
+        final z = segments[segments.length - 3];
+        final x = segments[segments.length - 2];
+        final y = segments.last;
+        final file = File('${tileRoot.path}${Platform.pathSeparator}$z${Platform.pathSeparator}$x${Platform.pathSeparator}$y');
+        if (await file.exists()) {
+          saved += 1;
+          continue;
+        }
+
+        final response = await http.get(uri).timeout(const Duration(seconds: 8));
+        if (response.statusCode != 200) continue;
+        await file.parent.create(recursive: true);
+        await file.writeAsBytes(response.bodyBytes);
+        saved += 1;
+      } catch (_) {
+        // Tile download is best-effort; the package JSON remains usable offline.
+      }
+    }
+
+    return saved;
+  }
+
+  Future<File> _packageFile() async {
+    final directory = await getApplicationDocumentsDirectory();
+    return File('${directory.path}${Platform.pathSeparator}emergency_sync_package.json');
+  }
+
+  Future<Directory> _tileDirectory() async {
+    final directory = await getTemporaryDirectory();
+    return Directory('${directory.path}${Platform.pathSeparator}emergency_tiles');
+  }
+
+  Future<String> tileUrlTemplate() async {
+    final directory = await _tileDirectory();
+    return '${directory.path.replaceAll('\\', '/')}/{z}/{x}/{y}.png';
+  }
+}
+
 class CitizenRepository {
   CitizenRepository(this._backend);
 
   final AmplifyBackend _backend;
+  final EmergencySyncCache _emergencyCache = const EmergencySyncCache();
 
   Future<DashboardBundle> loadDashboard() async {
-    final results = await Future.wait<dynamic>([
-      _backend.queryRoot(AppGraphQL.getDashboardStats, 'getDashboardStats'),
-      _queryRootOrDefault(
-        AppGraphQL.getDisasters,
-        'getDisasters',
-        defaultValue: const [],
-        variables: const {'status': 'active'},
-      ),
-      _queryRootOrDefault(
-        AppGraphQL.getSafeZones,
-        'getSafeZones',
-        defaultValue: const [],
-      ),
-      _backend.queryRoot(AppGraphQL.getNewsUpdates, 'getNewsUpdates'),
-      _backend.getCurrentPosition(),
-    ]);
+    try {
+      final results = await Future.wait<dynamic>([
+        _backend.queryRoot(AppGraphQL.getDashboardStats, 'getDashboardStats'),
+        _queryRootOrDefault(
+          AppGraphQL.getDisasters,
+          'getDisasters',
+          defaultValue: const [],
+          variables: const {'status': 'active'},
+        ),
+        _queryRootOrDefault(
+          AppGraphQL.getSafeZones,
+          'getSafeZones',
+          defaultValue: const [],
+        ),
+        _backend.queryRoot(AppGraphQL.getNewsUpdates, 'getNewsUpdates'),
+        _backend.getCurrentPosition(),
+      ]);
 
-    final position = results[4] as Position?;
-    final nearest = await _loadNearestSafeZone(position);
+      final position = results[4] as Position?;
+      final nearest = await _loadNearestSafeZone(position);
 
-    return DashboardBundle(
-      stats: DashboardStats.fromJson(results[0] as Map<String, dynamic>),
-      disasters: _mapList(results[1], Disaster.fromJson),
-      safeZones: _mapList(results[2], SafeZone.fromJson),
-      news: _mapList(results[3], NewsUpdate.fromJson),
-      nearestSafeZone: nearest,
-    );
+      return DashboardBundle(
+        stats: DashboardStats.fromJson(results[0] as Map<String, dynamic>),
+        disasters: _mapList(results[1], Disaster.fromJson),
+        safeZones: _mapList(results[2], SafeZone.fromJson),
+        news: _mapList(results[3], NewsUpdate.fromJson),
+        nearestSafeZone: nearest,
+      );
+    } catch (_) {
+      return _cachedDashboardBundle();
+    }
   }
 
   Future<MapBundle> loadMapData() async {
-    final results = await Future.wait<dynamic>([
-      _queryRootOrDefault(
-        AppGraphQL.getDisasters,
-        'getDisasters',
-        defaultValue: const [],
-        variables: const {'status': 'active'},
-      ),
-      _queryRootOrDefault(
-        AppGraphQL.getSafeZones,
-        'getSafeZones',
-        defaultValue: const [],
-      ),
-      _backend.queryRoot(AppGraphQL.getResources, 'getResources'),
-      _backend.getCurrentPosition(),
-    ]);
+    try {
+      final results = await Future.wait<dynamic>([
+        _queryRootOrDefault(
+          AppGraphQL.getDisasters,
+          'getDisasters',
+          defaultValue: const [],
+          variables: const {'status': 'active'},
+        ),
+        _queryRootOrDefault(
+          AppGraphQL.getSafeZones,
+          'getSafeZones',
+          defaultValue: const [],
+        ),
+        _backend.queryRoot(AppGraphQL.getResources, 'getResources'),
+        _backend.getCurrentPosition(),
+      ]);
 
-    final position = results[3] as Position?;
-    final nearest = await _loadNearestSafeZone(position);
+      final position = results[3] as Position?;
+      final nearest = await _loadNearestSafeZone(position);
 
-    return MapBundle(
-      disasters: _mapList(results[0], Disaster.fromJson),
-      safeZones: _mapList(results[1], SafeZone.fromJson),
-      resources: _mapList(results[2], ResourceItem.fromJson),
-      nearestSafeZone: nearest,
-      currentLocation: position == null
-          ? null
-          : LatLng(position.latitude, position.longitude),
-    );
+      return MapBundle(
+        disasters: _mapList(results[0], Disaster.fromJson),
+        safeZones: _mapList(results[1], SafeZone.fromJson),
+        resources: _mapList(results[2], ResourceItem.fromJson),
+        nearestSafeZone: nearest,
+        currentLocation: position == null
+            ? null
+            : LatLng(position.latitude, position.longitude),
+      );
+    } catch (_) {
+      return _cachedMapBundle();
+    }
   }
 
   Future<List<NewsUpdate>> loadNews() async {
-    final result = await _backend.queryRoot(
-      AppGraphQL.getNewsUpdates,
-      'getNewsUpdates',
-    );
-    return _mapList(result, NewsUpdate.fromJson);
+    try {
+      final result = await _backend.queryRoot(
+        AppGraphQL.getNewsUpdates,
+        'getNewsUpdates',
+      );
+      return _mapList(result, NewsUpdate.fromJson);
+    } catch (_) {
+      final cached = await _emergencyCache.loadPackage();
+      return cached?.snapshot.newsUpdates ?? const [];
+    }
   }
 
   Future<CitizenAiGuidance> loadCitizenGuidance({String? disasterId}) async {
@@ -1520,6 +1836,108 @@ class CitizenRepository {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<EmergencySyncPackage> downloadEmergencySyncPackage({
+    double radiusKm = 8,
+    int minZoom = 12,
+    int maxZoom = 14,
+  }) async {
+    final position = await _backend.getCurrentPosition(forcePrompt: true);
+    if (position == null) {
+      throw Exception('Location permission is required to sync emergency data.');
+    }
+
+    final existing = await _emergencyCache.loadPackage();
+    final result = await _backend.queryRoot(
+      AppGraphQL.getEmergencySyncPackage,
+      'getEmergencySyncPackage',
+      variables: {
+        'input': EmergencySyncInput(
+          lat: position.latitude,
+          lon: position.longitude,
+          radiusKm: radiusKm,
+          minZoom: minZoom,
+          maxZoom: maxZoom,
+          lastSyncAt: existing?.generatedAt,
+        ).toJson(),
+      },
+    );
+    return _emergencyCache.savePackage(
+      EmergencySyncPackage.fromJson(result as Map<String, dynamic>),
+    );
+  }
+
+  Future<EmergencySyncPackage?> loadCachedEmergencyPackage() {
+    return _emergencyCache.loadPackage();
+  }
+
+  Future<String?> cachedTileUrlTemplate() async {
+    final cached = await _emergencyCache.loadPackage();
+    if (cached == null) return null;
+    return _emergencyCache.tileUrlTemplate();
+  }
+
+  Future<DashboardBundle> _cachedDashboardBundle() async {
+    final cached = await _emergencyCache.loadPackage();
+    if (cached == null) {
+      throw Exception('Live backend unavailable and no emergency package is cached.');
+    }
+    final snapshot = cached.snapshot;
+    final position = await _backend.getCurrentPosition();
+    final nearest = _nearestCachedSafeZone(snapshot.safeZones, position);
+    return DashboardBundle(
+      stats: DashboardStats(
+        activeDisasters: snapshot.disasters.length,
+        pendingSos: 0,
+        totalResources: snapshot.resources.length,
+        totalSafeZones: snapshot.safeZones.length,
+        totalUsers: 0,
+      ),
+      disasters: snapshot.disasters,
+      safeZones: snapshot.safeZones,
+      news: snapshot.newsUpdates,
+      nearestSafeZone: nearest,
+    );
+  }
+
+  Future<MapBundle> _cachedMapBundle() async {
+    final cached = await _emergencyCache.loadPackage();
+    if (cached == null) {
+      throw Exception('Live backend unavailable and no emergency package is cached.');
+    }
+    final snapshot = cached.snapshot;
+    final position = await _backend.getCurrentPosition();
+    return MapBundle(
+      disasters: snapshot.disasters,
+      safeZones: snapshot.safeZones,
+      resources: snapshot.resources,
+      nearestSafeZone: _nearestCachedSafeZone(snapshot.safeZones, position),
+      currentLocation: position == null
+          ? null
+          : LatLng(position.latitude, position.longitude),
+    );
+  }
+
+  SafeZone? _nearestCachedSafeZone(List<SafeZone> zones, Position? position) {
+    if (position == null) return zones.firstOrNull;
+    final withDistance = zones
+        .map((zone) {
+          final point = GeoJsonCodec.decodePoint(zone.location);
+          if (point == null) return null;
+          return MapEntry(
+            zone,
+            const Distance().as(
+              LengthUnit.Meter,
+              LatLng(position.latitude, position.longitude),
+              point.latLng,
+            ),
+          );
+        })
+        .whereType<MapEntry<SafeZone, double>>()
+        .toList()
+      ..sort((a, b) => a.value.compareTo(b.value));
+    return withDistance.isEmpty ? zones.firstOrNull : withDistance.first.key;
   }
 
   Future<dynamic> _queryRootOrDefault(

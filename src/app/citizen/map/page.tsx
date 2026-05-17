@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 
 import { MapView, markersFromPoints } from "@/components/map/map-view";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { loadEmergencySyncPackage, type CachedEmergencySyncPackage } from "@/lib/offline/emergency-cache";
 import { parseGeoJsonPoint } from "@/lib/utils";
 import { mockDisasters, mockResources, mockSafeZones } from "@/lib/mock-data";
 import type { MapMarker } from "@/lib/types";
@@ -39,8 +40,10 @@ function CitizenMapContent() {
   const searchParams = useSearchParams();
   const selectedSafeZoneId = searchParams.get("safeZone");
   const [userLocation, setUserLocation] = useState<{ longitude: number; latitude: number } | null>(null);
+  const [offlinePackage, setOfflinePackage] = useState<CachedEmergencySyncPackage | null>(null);
 
   useEffect(() => {
+    void loadEmergencySyncPackage().then(setOfflinePackage);
     if (!navigator.geolocation) return;
 
     navigator.geolocation.getCurrentPosition(
@@ -60,18 +63,25 @@ function CitizenMapContent() {
     );
   }, []);
 
+  const disasters = offlinePackage?.parsed.disasters.length ? offlinePackage.parsed.disasters : mockDisasters;
+  const safeZones = offlinePackage?.parsed.safeZones.length ? offlinePackage.parsed.safeZones : mockSafeZones;
+  const resources = offlinePackage?.parsed.resources.length ? offlinePackage.parsed.resources : mockResources;
+
   const selectedSafeZone = useMemo(
-    () => mockSafeZones.find((zone) => zone.id === selectedSafeZoneId) ?? mockSafeZones[0],
-    [selectedSafeZoneId]
+    () => safeZones.find((zone) => zone.id === selectedSafeZoneId) ?? safeZones[0],
+    [safeZones, selectedSafeZoneId]
   );
   const selectedSafeZonePoint = parseGeoJsonPoint(selectedSafeZone?.location);
-  const disasterCenterPoint = parseGeoJsonPoint(mockDisasters[0]?.centerPoint);
-  const disasterPolygon = {
-    type: "Polygon",
-    coordinates: [[[79.851, 6.915], [79.891, 6.915], [79.891, 6.949], [79.851, 6.949], [79.851, 6.915]]]
-  };
+  const disasterCenterPoint = parseGeoJsonPoint(disasters[0]?.centerPoint);
+  const disasterPolygon =
+    disasters[0]?.affectedArea
+      ? JSON.parse(disasters[0].affectedArea)
+      : {
+          type: "Polygon",
+          coordinates: [[[79.851, 6.915], [79.891, 6.915], [79.891, 6.949], [79.851, 6.949], [79.851, 6.915]]]
+        };
   const disasterInfoPoint = useMemo(() => {
-    const ring = disasterPolygon.coordinates[0];
+    const ring = disasterPolygon.coordinates[0] as number[][];
     const longitudes = ring.map(([longitude]) => longitude);
     const latitudes = ring.map(([, latitude]) => latitude);
 
@@ -83,8 +93,8 @@ function CitizenMapContent() {
   const isUserAffected = useMemo(() => isPointInsidePolygon(userLocation, disasterPolygon), [userLocation]);
 
   const markers: MapMarker[] = [
-    ...markersFromPoints(mockSafeZones.map((zone) => ({ id: zone.id, name: zone.name, location: zone.location, color: "#22c55e" }))),
-    ...markersFromPoints(mockResources.map((resource) => ({ id: resource.id, name: resource.name, location: resource.location, color: "#f59e0b" }))),
+    ...markersFromPoints(safeZones.map((zone) => ({ id: zone.id, name: zone.name, location: zone.location, color: "#22c55e" }))),
+    ...markersFromPoints(resources.map((resource) => ({ id: resource.id, name: resource.name, location: resource.location, color: "#f59e0b" }))),
     ...(userLocation
       ? [
           {
@@ -100,11 +110,11 @@ function CitizenMapContent() {
     ...(disasterInfoPoint
       ? [
           {
-            id: `${mockDisasters[0].id}-info`,
-            label: `${mockDisasters[0].title}`,
+            id: `${disasters[0].id}-info`,
+            label: `${disasters[0].title}`,
             longitude: disasterInfoPoint.longitude,
             latitude: disasterInfoPoint.latitude,
-            popup: `<div style="color:#f8fafc;font-weight:600;font-size:14px;line-height:1.3;">${mockDisasters[0].title}</div>`,
+            popup: `<div style="color:#f8fafc;font-weight:600;font-size:14px;line-height:1.3;">${disasters[0].title}</div>`,
             variant: "info"
           } satisfies MapMarker
         ]
@@ -117,6 +127,7 @@ function CitizenMapContent() {
         <CardTitle>Live disaster map</CardTitle>
         <CardDescription className="mt-2">
           Red zones show affected areas, green markers show safe zones, and amber markers show resource depots.
+          {offlinePackage ? ` Showing cached emergency package from ${offlinePackage.generatedAt}.` : ""}
         </CardDescription>
         <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,36rem)_18rem] lg:items-start lg:justify-center">
           <MapView
@@ -157,8 +168,8 @@ function CitizenMapContent() {
           <CardDescription className="mt-2">
             {userLocation
               ? isUserAffected
-                ? `You are currently inside the ${mockDisasters[0].title} disaster zone.`
-                : `You are currently outside the ${mockDisasters[0].title} disaster zone.`
+                ? `You are currently inside the ${disasters[0].title} disaster zone.`
+                : `You are currently outside the ${disasters[0].title} disaster zone.`
               : "Allow location access to check whether you are inside the disaster zone."}
           </CardDescription>
         </Card>

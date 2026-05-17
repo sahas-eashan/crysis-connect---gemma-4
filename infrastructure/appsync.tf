@@ -54,6 +54,7 @@ locals {
     "Query.getNewsUpdates"             = "Query"
     "Query.getOrganizations"           = "Query"
     "Query.getDashboardStats"          = "Query"
+    "Query.getEmergencySyncPackage"    = "Query"
     "Mutation.createDisaster"          = "Mutation"
     "Mutation.updateDisaster"          = "Mutation"
     "Mutation.createSafeZone"          = "Mutation"
@@ -103,15 +104,15 @@ EOF
 
 locals {
   ai_fields = {
-    "Query.getCitizenGuidance"            = "Query"
-    "Query.getAiAuditLogs"                = "Query"
-    "Mutation.generateIncidentBrief"      = "Mutation"
-    "Mutation.generateAlertDraft"         = "Mutation"
-    "Mutation.recommendOperations"        = "Mutation"
-    "Mutation.triageSosCase"              = "Mutation"
-    "Mutation.recommendResourceDispatch"  = "Mutation"
-    "Mutation.prepareSosSubmission"       = "Mutation"
-    "Mutation.reviewAiAuditLog"           = "Mutation"
+    "Query.getCitizenGuidance"           = "Query"
+    "Query.getAiAuditLogs"               = "Query"
+    "Mutation.generateIncidentBrief"     = "Mutation"
+    "Mutation.generateAlertDraft"        = "Mutation"
+    "Mutation.recommendOperations"       = "Mutation"
+    "Mutation.triageSosCase"             = "Mutation"
+    "Mutation.recommendResourceDispatch" = "Mutation"
+    "Mutation.prepareSosSubmission"      = "Mutation"
+    "Mutation.reviewAiAuditLog"          = "Mutation"
   }
 }
 

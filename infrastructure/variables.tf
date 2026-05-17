@@ -136,3 +136,21 @@ variable "ai_allow_cloud_fallback" {
   type        = bool
   default     = false
 }
+
+variable "offline_tile_url_template" {
+  description = "URL template used by emergency sync packages for offline map tile manifests. Production deployments should use an owned or approved tile server."
+  type        = string
+  default     = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+}
+
+variable "offline_tile_min_zoom" {
+  description = "Default minimum zoom level for emergency sync tile manifests."
+  type        = number
+  default     = 12
+}
+
+variable "offline_tile_max_zoom" {
+  description = "Default maximum zoom level for emergency sync tile manifests."
+  type        = number
+  default     = 15
+}

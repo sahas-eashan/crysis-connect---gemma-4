@@ -239,6 +239,22 @@ export const queries = {
         status
       }
     }
+  `,
+  getEmergencySyncPackage: /* GraphQL */ `
+    query GetEmergencySyncPackage($input: EmergencySyncInput!) {
+      getEmergencySyncPackage(input: $input) {
+        id
+        generatedAt
+        validUntil
+        checksum
+        version
+        center
+        radiusKm
+        bounds
+        packageJson
+        changedSinceLastSync
+      }
+    }
   `
 };
 

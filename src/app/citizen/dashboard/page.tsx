@@ -12,6 +12,7 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { useLiveFeed } from "@/hooks/use-live-feed";
 import { configureAmplify } from "@/lib/aws/amplify";
 import { queries } from "@/lib/aws/graphql/operations";
+import { buildCachedDashboardStats, cachedSafeZones, loadEmergencySyncPackage } from "@/lib/offline/emergency-cache";
 import type { DashboardStats, Disaster, SafeZone } from "@/lib/types";
 import { percent } from "@/lib/utils";
 
@@ -67,6 +68,15 @@ export default function CitizenDashboardPage() {
         setSafeZones(((safeZonesResult as any).data?.getSafeZones ?? []) as SafeZone[]);
       } catch (loadError) {
         if (!active) return;
+        const cached = await loadEmergencySyncPackage();
+        if (cached) {
+          setStats(buildCachedDashboardStats(cached));
+          setDisaster(cached.parsed.disasters[0] ?? null);
+          setSafeZones(cachedSafeZones(cached));
+          setError(`Live backend unavailable. Showing emergency package cached at ${cached.generatedAt}.`);
+          return;
+        }
+
         setStats(emptyStats);
         setDisaster(null);
         setSafeZones([]);

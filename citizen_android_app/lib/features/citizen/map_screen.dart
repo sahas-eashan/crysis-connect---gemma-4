@@ -60,6 +60,7 @@ class _MapScreenState extends State<MapScreen> {
   late Future<MapBundle> _future;
   final MapController _mapController = MapController();
   String _filter = 'all';
+  String? _cachedTileTemplate;
   _RouteInfo? _activeRoute;
   _MapDestination? _selectedDestination;
   bool _routeLoading = false;
@@ -68,6 +69,10 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     _future = widget.repository.loadMapData();
+    widget.repository.cachedTileUrlTemplate().then((template) {
+      if (!mounted) return;
+      setState(() => _cachedTileTemplate = template);
+    });
   }
 
   Future<void> _refresh() async {
@@ -75,6 +80,10 @@ class _MapScreenState extends State<MapScreen> {
       _future = widget.repository.loadMapData();
       _activeRoute = null;
       _selectedDestination = null;
+    });
+    widget.repository.cachedTileUrlTemplate().then((template) {
+      if (!mounted) return;
+      setState(() => _cachedTileTemplate = template);
     });
     await _future;
   }
@@ -386,7 +395,12 @@ class _MapScreenState extends State<MapScreen> {
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate:
+                      _cachedTileTemplate ??
+                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  tileProvider: _cachedTileTemplate == null
+                      ? null
+                      : FileTileProvider(),
                   userAgentPackageName: 'com.crisisconnect.citizen',
                 ),
                 if ((_filter == 'all' || _filter == 'disasters') &&

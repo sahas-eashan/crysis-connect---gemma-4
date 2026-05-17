@@ -101,6 +101,8 @@ Copy `.env.example` to `.env.local` and fill in the Terraform outputs after prov
 
 For local Gemma 4 development, keep `AI_PROVIDER=gemma`, `GEMMA_RUNTIME=ollama`, and set `GEMMA_ENDPOINT=http://localhost:11434`. For deployed AWS Lambda, `GEMMA_ENDPOINT` must point to a reachable Gemma gateway or hosted endpoint; Lambda `localhost` is the Lambda sandbox, not your development machine.
 
+Emergency sync packages can include offline map tile manifests for bounded disaster areas. The default local/demo template is `https://tile.openstreetmap.org/{z}/{x}/{y}.png`; production deployments should use an owned, cached, or otherwise approved tile service instead of bulk-downloading public OSM tiles.
+
 ### 3. Provision infrastructure
 
 ```bash

@@ -52,6 +52,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await _future;
   }
 
+  Future<void> _syncEmergencyPackage() async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Preparing offline emergency package...')),
+    );
+
+    try {
+      final package = await widget.repository.downloadEmergencySyncPackage();
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Offline package ready with ${package.snapshot.tileUrls.length} map tiles.',
+          ),
+        ),
+      );
+      await _refresh();
+    } catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -92,6 +117,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   title: l10n.noActiveAlerts,
                   message: l10n.noActiveAlertsMsg,
                 ),
+              const SizedBox(height: 16),
+              _EmergencySyncCard(
+                repository: widget.repository,
+                onSync: _syncEmergencyPackage,
+              ),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -243,6 +273,95 @@ class _EmergencyBanner extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _EmergencySyncCard extends StatelessWidget {
+  const _EmergencySyncCard({
+    required this.repository,
+    required this.onSync,
+  });
+
+  final CitizenRepository repository;
+  final Future<void> Function() onSync;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<EmergencySyncPackage?>(
+      future: repository.loadCachedEmergencyPackage(),
+      builder: (context, snapshot) {
+        final package = snapshot.data;
+        final generatedAt = DateTime.tryParse(package?.generatedAt ?? '');
+        final ageMinutes = generatedAt == null
+            ? null
+            : DateTime.now().difference(generatedAt).inMinutes.clamp(0, 99999);
+        final snapshotData = package?.snapshot;
+        final stale = snapshotData?.isStale ?? true;
+
+        return Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: stale ? AppColors.surfaceLowest : AppColors.primary,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: stale
+                      ? AppColors.primaryFixed
+                      : Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  Icons.offline_bolt_rounded,
+                  color: stale ? AppColors.primary : Colors.white,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Emergency Sync Package',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: stale ? AppColors.onSurface : Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      package == null
+                          ? 'Download cached data and map tiles before connectivity drops.'
+                          : 'Last synced ${ageMinutes ?? 0} min ago • ${snapshotData?.tileUrls.length ?? 0} map tiles',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: stale
+                                ? AppColors.surfaceVariantText
+                                : Colors.white.withValues(alpha: 0.86),
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              FilledButton(
+                onPressed: onSync,
+                style: FilledButton.styleFrom(
+                  backgroundColor:
+                      stale ? AppColors.primary : Colors.white,
+                  foregroundColor:
+                      stale ? Colors.white : AppColors.primary,
+                ),
+                child: const Text('Sync'),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

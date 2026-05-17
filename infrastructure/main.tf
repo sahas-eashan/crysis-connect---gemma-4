@@ -32,6 +32,8 @@ provider "aws" {
 resource "terraform_data" "package_lambdas" {
   triggers_replace = [
     filesha256("${path.module}/../scripts/package-lambdas.mjs"),
+    filesha256("${path.module}/../scripts/bootstrap-db.mjs"),
+    filesha256("${path.module}/../db/migrations/002_gemma_offline_intelligence.sql"),
     filesha256("${path.module}/../lambda/resolver/index.ts"),
     filesha256("${path.module}/../lambda/resolver/package.json"),
     filesha256("${path.module}/../lambda/resolver/package-lock.json"),

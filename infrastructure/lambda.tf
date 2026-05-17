@@ -10,15 +10,18 @@ resource "aws_lambda_function" "resolver" {
 
   environment {
     variables = {
-      DB_HOST              = aws_db_instance.postgres.address
-      DB_PORT              = tostring(aws_db_instance.postgres.port)
-      DB_NAME              = var.db_name
-      DB_USER              = var.db_username
-      DB_PASSWORD          = var.db_password
-      S3_BUCKET            = aws_s3_bucket.uploads.bucket
-      SNS_TOPIC_ARN        = aws_sns_topic.alerts.arn
-      SES_FROM             = var.ses_sender_email
-      WORKER_FUNCTION_NAME = aws_lambda_function.worker.function_name
+      DB_HOST                   = aws_db_instance.postgres.address
+      DB_PORT                   = tostring(aws_db_instance.postgres.port)
+      DB_NAME                   = var.db_name
+      DB_USER                   = var.db_username
+      DB_PASSWORD               = var.db_password
+      S3_BUCKET                 = aws_s3_bucket.uploads.bucket
+      SNS_TOPIC_ARN             = aws_sns_topic.alerts.arn
+      SES_FROM                  = var.ses_sender_email
+      WORKER_FUNCTION_NAME      = aws_lambda_function.worker.function_name
+      OFFLINE_TILE_URL_TEMPLATE = var.offline_tile_url_template
+      OFFLINE_TILE_MIN_ZOOM     = tostring(var.offline_tile_min_zoom)
+      OFFLINE_TILE_MAX_ZOOM     = tostring(var.offline_tile_max_zoom)
     }
   }
 

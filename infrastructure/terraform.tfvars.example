@@ -15,4 +15,7 @@ gemma_analysis_model    = "gemma4:26b-it"
 gemma_finetuned_model   = "crisisconnect-gemma4-e4b-sos"
 gemma_mode              = "local_first"
 ai_allow_cloud_fallback = false
+offline_tile_url_template = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+offline_tile_min_zoom     = 12
+offline_tile_max_zoom     = 15
 allowed_cidr_blocks = ["0.0.0.0/0"]

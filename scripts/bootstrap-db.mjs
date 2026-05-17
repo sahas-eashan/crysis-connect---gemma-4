@@ -2,7 +2,6 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { createClient, executeSqlFile } from "./run-sql.mjs";
 
-const schemaFile = "db/migrations/001_schema.sql";
 const seedFile = "db/seed.sql";
 const maxAttempts = Number(process.env.DB_BOOTSTRAP_MAX_ATTEMPTS ?? 24);
 const waitMs = Number(process.env.DB_BOOTSTRAP_WAIT_MS ?? 10000);
@@ -35,7 +34,8 @@ async function waitForDatabase() {
 }
 
 await waitForDatabase();
-await executeSqlFile(schemaFile);
+await executeSqlFile("db/migrations/001_schema.sql");
+await executeSqlFile("db/migrations/002_gemma_offline_intelligence.sql");
 await executeSqlFile(seedFile);
 
 console.log("Database bootstrap completed successfully.");
