@@ -1,8 +1,12 @@
 import 'dart:async';
 
 import 'package:crisisconnect_citizen/core/backend.dart';
+import 'package:crisisconnect_citizen/features/citizen/offline_sos/offline_sos_models.dart';
+import 'package:crisisconnect_citizen/features/citizen/offline_sos/sos_gemma_structurer.dart';
+import 'package:crisisconnect_citizen/features/citizen/offline_sos/sos_queue_repository.dart';
 import 'package:crisisconnect_citizen/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SosScreen extends StatefulWidget {
   const SosScreen({super.key, required this.repository, required this.userId});
@@ -21,12 +25,17 @@ class _SosScreenState extends State<SosScreen> {
   String _selectedType = 'medical';
   final TextEditingController _descriptionController = TextEditingController();
   PreparedSos? _preparedSos;
+  StructuredOfflineSos? _offlinePreparedSos;
+  late final SosQueueRepository _queueRepository;
+  List<QueuedOfflineSos> _queuedSos = const [];
   bool _preparing = false;
 
   @override
   void initState() {
     super.initState();
+    _queueRepository = SosQueueRepository(widget.repository);
     _future = widget.repository.loadSosBundle();
+    _loadQueue();
     _subscription = widget.repository
         .subscribeToMySosUpdates(widget.userId)
         .listen((signal) {
@@ -49,7 +58,14 @@ class _SosScreenState extends State<SosScreen> {
     setState(() {
       _future = widget.repository.loadSosBundle();
     });
+    await _loadQueue();
     await _future;
+  }
+
+  Future<void> _loadQueue() async {
+    final queue = await _queueRepository.loadQueue();
+    if (!mounted) return;
+    setState(() => _queuedSos = queue);
   }
 
   Future<void> _sendSos() async {
@@ -71,12 +87,93 @@ class _SosScreenState extends State<SosScreen> {
       );
     } catch (error) {
       if (!mounted) return;
+      if (_descriptionController.text.trim().isNotEmpty) {
+        await _queueOfflineSos(showSnack: false);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Live send failed. SOS queued offline.')),
+        );
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(error.toString().replaceFirst('Exception: ', '')),
         ),
       );
     }
+  }
+
+  Future<void> _prepareOfflineWithGemma() async {
+    if (_descriptionController.text.trim().isEmpty) return;
+    setState(() => _preparing = true);
+    try {
+      final package = await widget.repository.loadCachedEmergencyPackage();
+      final position = await widget.repository.loadCurrentPosition();
+      final structured = await const SosGemmaStructurer().structure(
+        package: package,
+        position: position,
+        type: _selectedType,
+        description: _descriptionController.text.trim(),
+      );
+      if (!mounted) return;
+      setState(() => _offlinePreparedSos = structured);
+    } finally {
+      if (mounted) setState(() => _preparing = false);
+    }
+  }
+
+  Future<void> _queueOfflineSos({bool showSnack = true}) async {
+    final description = _descriptionController.text.trim();
+    if (description.isEmpty) return;
+    final package = await widget.repository.loadCachedEmergencyPackage();
+    final position = await widget.repository.loadCurrentPosition();
+    final location = position == null
+        ? ''
+        : GeoJsonCodec.encodePoint(GeoJsonCodec.fromPosition(position));
+    final structured = _offlinePreparedSos ??
+        await const SosGemmaStructurer().structure(
+          package: package,
+          position: position,
+          type: _selectedType,
+          description: description,
+        );
+    final item = QueuedOfflineSos(
+      localId: 'offline-${DateTime.now().millisecondsSinceEpoch}',
+      type: _selectedType,
+      description: description,
+      location: location,
+      createdAt: DateTime.now().toIso8601String(),
+      packageChecksum: package?.checksum ?? '',
+      status: 'queued',
+      retryCount: 0,
+      structured: structured,
+    );
+    await _queueRepository.enqueue(item);
+    await _loadQueue();
+    if (showSnack && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('SOS saved to offline queue.')),
+      );
+    }
+  }
+
+  Future<void> _syncQueue() async {
+    final queue = await _queueRepository.syncQueued();
+    if (!mounted) return;
+    setState(() => _queuedSos = queue);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${queue.where((item) => item.status == 'synced').length} queued SOS items synced.'),
+      ),
+    );
+  }
+
+  Future<void> _openSmsDraft(QueuedOfflineSos item) async {
+    final uri = Uri(
+      scheme: 'sms',
+      queryParameters: {'body': item.structured.smsDraft},
+    );
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   Future<void> _prepareWithAi() async {
@@ -274,9 +371,39 @@ class _SosScreenState extends State<SosScreen> {
                   _preparing ? 'Preparing with AI...' : 'Prepare with AI',
                 ),
               ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _preparing ? null : _prepareOfflineWithGemma,
+                      child: const Text('Prepare offline'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () => _queueOfflineSos(),
+                      child: const Text('Queue offline'),
+                    ),
+                  ),
+                ],
+              ),
               if (_preparedSos != null) ...[
                 const SizedBox(height: 12),
                 _AiPreparedSosCard(result: _preparedSos!),
+              ],
+              if (_offlinePreparedSos != null) ...[
+                const SizedBox(height: 12),
+                _OfflinePreparedSosCard(result: _offlinePreparedSos!),
+              ],
+              if (_queuedSos.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                _OfflineQueueCard(
+                  items: _queuedSos,
+                  onSync: _syncQueue,
+                  onSms: _openSmsDraft,
+                ),
               ],
               const SizedBox(height: 20),
               Text(
@@ -430,6 +557,112 @@ class _AiPreparedSosCard extends StatelessWidget {
               child: Text('• $item'),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OfflinePreparedSosCard extends StatelessWidget {
+  const _OfflinePreparedSosCard({required this.result});
+
+  final StructuredOfflineSos result;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.primaryFixed,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Gemma Offline SOS',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(result.refinedMessage),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            children: [
+              Chip(label: Text(result.urgency.toUpperCase())),
+              if (result.medicalRisk) const Chip(label: Text('MEDICAL RISK')),
+              if (result.peopleCount > 0)
+                Chip(label: Text('${result.peopleCount} people')),
+            ],
+          ),
+          if (result.missingInformation.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ...result.missingInformation.map((item) => Text('• Missing: $item')),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _OfflineQueueCard extends StatelessWidget {
+  const _OfflineQueueCard({
+    required this.items,
+    required this.onSync,
+    required this.onSms,
+  });
+
+  final List<QueuedOfflineSos> items;
+  final Future<void> Function() onSync;
+  final Future<void> Function(QueuedOfflineSos item) onSms;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceHighest,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Offline SOS Queue',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ),
+              TextButton(onPressed: onSync, child: const Text('Sync')),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...items.take(3).map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${item.type.toUpperCase()} • ${item.status}',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => onSms(item),
+                        child: const Text('SMS'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
         ],
       ),
     );

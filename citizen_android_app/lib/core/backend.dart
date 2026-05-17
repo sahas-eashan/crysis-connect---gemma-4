@@ -1740,15 +1740,17 @@ class CitizenRepository {
   Future<SosSignal> createSos({
     required String type,
     String? description,
+    String? locationOverride,
   }) async {
-    final position = await _backend.getCurrentPosition(forcePrompt: true);
-    if (position == null) {
+    final position = locationOverride == null
+        ? await _backend.getCurrentPosition(forcePrompt: true)
+        : null;
+    if (position == null && locationOverride == null) {
       throw Exception('Location permission is required to send an SOS.');
     }
 
-    final location = GeoJsonCodec.encodePoint(
-      GeoJsonCodec.fromPosition(position),
-    );
+    final location =
+        locationOverride ?? GeoJsonCodec.encodePoint(GeoJsonCodec.fromPosition(position!));
     final result = await _mutateRootOrFallback(
       AppGraphQL.createSos,
       'createSOS',
@@ -1870,6 +1872,10 @@ class CitizenRepository {
 
   Future<EmergencySyncPackage?> loadCachedEmergencyPackage() {
     return _emergencyCache.loadPackage();
+  }
+
+  Future<Position?> loadCurrentPosition({bool forcePrompt = false}) {
+    return _backend.getCurrentPosition(forcePrompt: forcePrompt);
   }
 
   Future<String?> cachedTileUrlTemplate() async {

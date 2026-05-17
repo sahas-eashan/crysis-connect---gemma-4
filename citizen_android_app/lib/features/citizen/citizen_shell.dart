@@ -2,6 +2,7 @@ import 'package:crisisconnect_citizen/app/app.dart';
 import 'package:crisisconnect_citizen/core/backend.dart';
 import 'package:crisisconnect_citizen/features/citizen/dashboard_screen.dart';
 import 'package:crisisconnect_citizen/features/citizen/map_screen.dart';
+import 'package:crisisconnect_citizen/features/citizen/offline_advisor/offline_advisor_screen.dart';
 import 'package:crisisconnect_citizen/features/citizen/resources_screen.dart';
 import 'package:crisisconnect_citizen/features/citizen/sos_screen.dart';
 import 'package:crisisconnect_citizen/l10n/app_localizations.dart';
@@ -62,7 +63,7 @@ class _CitizenShellState extends State<CitizenShell> {
               ),
               const SizedBox(height: 16),
               _LanguageTile(
-                flag: '🇬🇧',
+                flag: 'EN',
                 title: 'English',
                 subtitle: 'English',
                 selected: currentCode == 'en' || currentCode == null,
@@ -73,12 +74,23 @@ class _CitizenShellState extends State<CitizenShell> {
               ),
               const SizedBox(height: 8),
               _LanguageTile(
-                flag: '🇱🇰',
-                title: 'සිංහල',
+                flag: 'SI',
+                title: 'Sinhala',
                 subtitle: 'Sinhala',
                 selected: currentCode == 'si',
                 onTap: () {
                   localeNotifier.setLocale(const Locale('si'));
+                  Navigator.pop(sheetContext);
+                },
+              ),
+              const SizedBox(height: 8),
+              _LanguageTile(
+                flag: 'TA',
+                title: 'Tamil',
+                subtitle: 'Tamil',
+                selected: currentCode == 'ta',
+                onTap: () {
+                  localeNotifier.setLocale(const Locale('ta'));
                   Navigator.pop(sheetContext);
                 },
               ),
@@ -105,6 +117,7 @@ class _CitizenShellState extends State<CitizenShell> {
         repository: widget.repository,
         userId: widget.session.userId ?? '',
       ),
+      OfflineAdvisorScreen(repository: widget.repository),
     ];
 
     return Scaffold(
@@ -166,7 +179,8 @@ class _CitizenShellState extends State<CitizenShell> {
                                   ),
                             ),
                             Text(
-                              widget.session.username ?? AppLocalizations.of(context)!.citizenAccess,
+                              widget.session.username ??
+                                  AppLocalizations.of(context)!.citizenAccess,
                               style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(color: AppColors.outline),
                             ),
@@ -229,15 +243,15 @@ class _CitizenShellState extends State<CitizenShell> {
       ),
       bottomNavigationBar: Padding(
         padding: EdgeInsets.fromLTRB(
-          16,
+          12,
           0,
-          16,
+          12,
           MediaQuery.of(context).padding.bottom == 0
               ? 14
               : MediaQuery.of(context).padding.bottom,
         ),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.90),
             borderRadius: BorderRadius.circular(30),
@@ -275,6 +289,12 @@ class _CitizenShellState extends State<CitizenShell> {
                 selected: _currentIndex == 3,
                 onTap: () => setState(() => _currentIndex = 3),
               ),
+              _NavButton(
+                icon: Icons.offline_bolt_rounded,
+                label: 'Advisor',
+                selected: _currentIndex == 4,
+                onTap: () => setState(() => _currentIndex = 4),
+              ),
             ],
           ),
         ),
@@ -303,7 +323,7 @@ class _NavButton extends StatelessWidget {
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: const EdgeInsets.symmetric(vertical: 9),
           decoration: BoxDecoration(
             color: selected ? AppColors.primary : Colors.transparent,
             borderRadius: BorderRadius.circular(22),
@@ -311,13 +331,20 @@ class _NavButton extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: selected ? Colors.white : AppColors.outline),
+              Icon(
+                icon,
+                color: selected ? Colors.white : AppColors.outline,
+                size: 22,
+              ),
               const SizedBox(height: 4),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: selected ? Colors.white : AppColors.outline,
-                  fontWeight: FontWeight.w800,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: selected ? Colors.white : AppColors.outline,
+                        fontWeight: FontWeight.w800,
+                      ),
                 ),
               ),
             ],
@@ -362,7 +389,7 @@ class _LanguageTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Text(flag, style: const TextStyle(fontSize: 28)),
+            Text(flag, style: const TextStyle(fontSize: 18)),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -385,8 +412,11 @@ class _LanguageTile extends StatelessWidget {
               ),
             ),
             if (selected)
-              const Icon(Icons.check_circle_rounded,
-                  color: AppColors.primary, size: 24),
+              const Icon(
+                Icons.check_circle_rounded,
+                color: AppColors.primary,
+                size: 24,
+              ),
           ],
         ),
       ),

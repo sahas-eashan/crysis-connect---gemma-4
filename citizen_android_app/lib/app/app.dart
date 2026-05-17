@@ -60,6 +60,7 @@ class _CrisisConnectAppState extends State<CrisisConnectApp> {
           supportedLocales: const [
             Locale('en'),
             Locale('si'),
+            Locale('ta'),
           ],
           locale: _localeNotifier.locale, // null = follow system
           theme: ThemeData(

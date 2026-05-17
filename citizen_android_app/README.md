@@ -43,6 +43,19 @@ flutter pub get
 flutter run --dart-define-from-file=dart_defines.example.json
 ```
 
+## On-device Gemma demo
+
+Module D uses an Android platform channel named `crisisconnect/gemma_runtime` to run a local Gemma-compatible Google AI Edge / MediaPipe model. Model files are intentionally not bundled in the APK.
+
+For development, push a compatible `.task` model to:
+
+```bash
+adb shell mkdir -p /data/local/tmp/llm
+adb push model.task /data/local/tmp/llm/model.task
+```
+
+Then open the Advisor tab and tap **Load dev model**. You can also import a `.task` or `.litertlm` file from device storage. Use a real high-end Android device for smoke tests; local LLM inference is not reliable on emulators.
+
 ## Verify
 
 ```bash
