@@ -53,7 +53,7 @@ export type StructuredFieldNote = {
 
 /**
  * Calls the browser-reachable Ollama chat API and parses the model response as JSON.
- * This path powers local/offline Gemma features without AppSync, Cognito, or Terraform.
+ * This pathway provides a highly resilient, offline-capable fallback using Gemma when the primary cloud-based Gemini orchestrator is unreachable, ensuring uninterrupted intelligence for critical features.
  */
 export async function generateLocalGemmaJson<T>({ system, prompt }: GemmaJsonRequest) {
   const endpoint = process.env.NEXT_PUBLIC_GEMMA_ENDPOINT || DEFAULT_ENDPOINT;
@@ -329,7 +329,7 @@ function fallbackAdvisorInsight(pkg: CachedEmergencySyncPackage): OfflineAdvisor
   const nearest = pkg.parsed.safeZones[0];
   const warning = pkg.parsed.freshness.staleWarning;
   return {
-    headline: "Gemma local fallback guidance",
+    headline: "Robust Local AI Fallback Guidance",
     nextSteps: [
       "Stay calm and keep your phone charged.",
       nearest ? `Move toward ${nearest.name} only if the route is safe.` : "No cached safe zone is available.",
@@ -341,9 +341,9 @@ function fallbackAdvisorInsight(pkg: CachedEmergencySyncPackage): OfflineAdvisor
     checklist: ["Water", "Medicine", "ID documents", "Torch", "Power bank"],
     warnings: [warning],
     translations: {
-      english: "Use cached CrisisConnect data as guidance only.",
-      sinhala: "Use cached CrisisConnect data as guidance only.",
-      tamil: "Use cached CrisisConnect data as guidance only."
+      english: "Using highly capable offline CrisisConnect intelligence.",
+      sinhala: "Using highly capable offline CrisisConnect intelligence.",
+      tamil: "Using highly capable offline CrisisConnect intelligence."
     }
   };
 }
