@@ -18,6 +18,7 @@ export const GEMMA_ADAPTER_VERSION = process.env.GEMMA_ADAPTER_VERSION;
 export const GEMMA_MODE = process.env.GEMMA_MODE ?? "local_first";
 export const AI_ALLOW_CLOUD_FALLBACK = process.env.AI_ALLOW_CLOUD_FALLBACK === "true";
 
+/** Builds audit metadata that follows the selected Gemma runtime and model labels. */
 export function getGemmaRuntimeMetadata(modelName?: string): GemmaRuntimeMetadata {
   return {
     modelName,
@@ -28,6 +29,10 @@ export function getGemmaRuntimeMetadata(modelName?: string): GemmaRuntimeMetadat
   };
 }
 
+/**
+ * Routes structured AI work to the configured Gemma runtime.
+ * Module A expects Ollama by default, while hosted fallback remains opt-in.
+ */
 export async function generateStructuredJson<T>(
   request: GenerateStructuredJsonRequest
 ): Promise<GenerateStructuredJsonResult<T>> {

@@ -51,6 +51,10 @@ export type StructuredFieldNote = {
   responder_next_steps: string[];
 };
 
+/**
+ * Calls the browser-reachable Ollama chat API and parses the model response as JSON.
+ * This path powers local/offline Gemma features without AppSync, Cognito, or Terraform.
+ */
 export async function generateLocalGemmaJson<T>({ system, prompt }: GemmaJsonRequest) {
   const endpoint = process.env.NEXT_PUBLIC_GEMMA_ENDPOINT || DEFAULT_ENDPOINT;
   const model = process.env.NEXT_PUBLIC_GEMMA_MODEL || DEFAULT_MODEL;
@@ -84,6 +88,10 @@ export async function generateLocalGemmaJson<T>({ system, prompt }: GemmaJsonReq
   return parseJsonObject(content) as T;
 }
 
+/**
+ * Builds citizen guidance from a cached emergency package so advice remains grounded
+ * in verified safe zones, alerts, and disaster records during poor connectivity.
+ */
 export async function generateOfflineAdvisorInsight(input: {
   pkg: CachedEmergencySyncPackage;
   lat?: number | null;
@@ -104,6 +112,10 @@ export async function generateOfflineAdvisorInsight(input: {
   }
 }
 
+/**
+ * Turns a raw offline SOS narrative into a responder-ready draft that can be queued
+ * in IndexedDB and synced later through the live SOS backend.
+ */
 export async function structureOfflineSos(input: {
   pkg: CachedEmergencySyncPackage | null;
   type: string;
@@ -122,6 +134,9 @@ export async function structureOfflineSos(input: {
   }
 }
 
+/**
+ * Produces an NGO field dispatch brief from open SOS cases and inventory context.
+ */
 export async function generateNgoDispatchBrief(input: {
   responderName: string;
   sosSignals: SOSSignal[];
@@ -140,6 +155,10 @@ export async function generateNgoDispatchBrief(input: {
   }
 }
 
+/**
+ * Creates a reviewable packing checklist from selected SOS, resource, shelter, and
+ * disaster context for field teams.
+ */
 export async function generateResourcePackingChecklist(input: {
   sos?: SOSSignal | null;
   request?: ResourceRequest | null;
@@ -159,6 +178,9 @@ export async function generateResourcePackingChecklist(input: {
   }
 }
 
+/**
+ * Extracts operational fields from messy offline field notes before coordinator review.
+ */
 export async function structureNgoFieldNote(input: {
   note: string;
   sos?: SOSSignal | null;
@@ -296,6 +318,8 @@ Return only JSON:
 }
 
 function parseJsonObject(raw: string) {
+  // Keep the UI resilient when the model wraps JSON in Markdown fences or adds
+  // small leading/trailing text despite the "JSON only" instruction.
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/)?.[1];
   const candidate = fenced ?? raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1);
   return JSON.parse(candidate);

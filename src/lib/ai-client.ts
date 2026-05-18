@@ -17,6 +17,7 @@ import type {
   SosTriage
 } from "@/lib/types";
 
+/** Returns true when the frontend has enough AWS config to call the live AppSync API. */
 const hasAwsConfig = () => Boolean(process.env.NEXT_PUBLIC_APPSYNC_GRAPHQL_URL);
 const inflightRequests = new Map<string, Promise<any>>();
 const recentResponses = new Map<string, { expiresAt: number; value: any }>();
@@ -89,6 +90,10 @@ async function runGraphql(request: { query: string; variables?: Record<string, u
   }
 }
 
+/**
+ * Deduplicates rapid repeated AI calls and keeps short-lived responses around so
+ * React refreshes or duplicate clicks do not spam the AI Lambda.
+ */
 async function runCached<T>(key: string, factory: () => Promise<T>, ttlMs = DEFAULT_CACHE_MS) {
   const cached = recentResponses.get(key);
   if (cached && cached.expiresAt > Date.now()) {
