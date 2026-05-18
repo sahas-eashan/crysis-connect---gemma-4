@@ -22,9 +22,69 @@ export type CachedEmergencySyncPackage = EmergencySyncPackage & {
   cachedAt: string;
 };
 
+function parseJsonValue<T>(value: string | null | undefined, fallback: T): T {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeEmergencySyncPackageJson(
+  raw: Partial<EmergencySyncPackageJson>,
+  pkg: EmergencySyncPackage
+): EmergencySyncPackageJson {
+  const fallbackCenter = parseJsonValue<{ type: "Point"; coordinates: [number, number] }>(pkg.center, {
+    type: "Point",
+    coordinates: [0, 0]
+  });
+  const fallbackBounds = parseJsonValue<EmergencySyncPackageJson["bounds"]>(pkg.bounds, {
+    minLat: 0,
+    maxLat: 0,
+    minLon: 0,
+    maxLon: 0
+  });
+  const tileManifest = raw.tileManifest ?? {
+    template: "",
+    minZoom: 0,
+    maxZoom: 0,
+    count: 0,
+    tiles: []
+  };
+
+  return {
+    generatedAt: raw.generatedAt ?? pkg.generatedAt,
+    validUntil: raw.validUntil ?? pkg.validUntil,
+    center: raw.center ?? fallbackCenter,
+    radiusKm: Number(raw.radiusKm ?? pkg.radiusKm ?? 0),
+    bounds: raw.bounds ?? fallbackBounds,
+    freshness: raw.freshness ?? {
+      sourceLatestAt: raw.generatedAt ?? pkg.generatedAt,
+      dataFreshnessMinutes: 0,
+      stale: false,
+      staleWarning: "Offline data may be incomplete. Use this as guidance only."
+    },
+    disasters: Array.isArray(raw.disasters) ? raw.disasters : [],
+    safeZones: Array.isArray(raw.safeZones) ? raw.safeZones : [],
+    resources: Array.isArray(raw.resources) ? raw.resources : [],
+    publicAlerts: Array.isArray(raw.publicAlerts) ? raw.publicAlerts : [],
+    newsUpdates: Array.isArray(raw.newsUpdates) ? raw.newsUpdates : [],
+    emergencyContacts: Array.isArray(raw.emergencyContacts) ? raw.emergencyContacts : [],
+    riskRules: Array.isArray(raw.riskRules) ? raw.riskRules : [],
+    tileManifest: {
+      template: typeof tileManifest.template === "string" ? tileManifest.template : "",
+      minZoom: Number(tileManifest.minZoom ?? 0),
+      maxZoom: Number(tileManifest.maxZoom ?? 0),
+      count: Number(tileManifest.count ?? tileManifest.tiles?.length ?? 0),
+      tiles: Array.isArray(tileManifest.tiles) ? tileManifest.tiles : []
+    }
+  };
+}
+
 /** Parses the backend package payload once before storing it for offline use. */
 export function parseEmergencySyncPackage(pkg: EmergencySyncPackage): EmergencySyncPackageJson {
-  return JSON.parse(pkg.packageJson) as EmergencySyncPackageJson;
+  return normalizeEmergencySyncPackageJson(parseJsonValue<Partial<EmergencySyncPackageJson>>(pkg.packageJson, {}), pkg);
 }
 
 /**
@@ -45,7 +105,14 @@ export async function saveEmergencySyncPackage(pkg: EmergencySyncPackage) {
 }
 
 export async function loadEmergencySyncPackage() {
-  return ((await get(PACKAGE_KEY)) as CachedEmergencySyncPackage | undefined) ?? null;
+  const cached = ((await get(PACKAGE_KEY)) as CachedEmergencySyncPackage | undefined) ?? null;
+  if (!cached) return null;
+
+  const normalized: CachedEmergencySyncPackage = {
+    ...cached,
+    parsed: normalizeEmergencySyncPackageJson(cached.parsed ?? {}, cached)
+  };
+  return normalized;
 }
 
 export async function clearEmergencySyncPackage() {

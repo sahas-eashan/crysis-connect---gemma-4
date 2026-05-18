@@ -144,8 +144,8 @@ export function GovernmentAiConsole({ disasterId }: { disasterId?: string | null
       ]);
       setBrief(nextBrief);
       setOperations(nextOperations);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Unable to load AI command console.");
+    } catch {
+      setError("Live command review is currently unavailable in this demo environment.");
     } finally {
       setLoading(false);
     }
@@ -174,7 +174,11 @@ export function GovernmentAiConsole({ disasterId }: { disasterId?: string | null
       </div>
 
       {loading ? <p className="mt-4 text-sm text-muted">Analyzing current operations...</p> : null}
-      {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
+      {error ? (
+        <p className="mt-4 rounded-2xl border border-sky-400/30 bg-sky-400/10 px-4 py-3 text-sm text-sky-100">
+          {error}
+        </p>
+      ) : null}
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-2xl border border-sky-500/20 bg-gradient-to-br from-slate-950/90 to-sky-950/40 p-4">
