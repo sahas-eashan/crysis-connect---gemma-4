@@ -10,14 +10,15 @@ import { GemmaProviderError } from "./provider-types.js";
 export const AI_PROVIDER = process.env.AI_PROVIDER ?? "gemma";
 export const GEMMA_RUNTIME = process.env.GEMMA_RUNTIME ?? "ollama";
 export const GEMMA_ENDPOINT = process.env.GEMMA_ENDPOINT ?? "http://localhost:11434";
-export const GEMMA_INTERACTIVE_MODEL = process.env.GEMMA_INTERACTIVE_MODEL ?? "gemma4:e4b-it";
-export const GEMMA_ANALYSIS_MODEL = process.env.GEMMA_ANALYSIS_MODEL ?? "gemma4:26b-it";
+export const GEMMA_INTERACTIVE_MODEL = process.env.GEMMA_INTERACTIVE_MODEL ?? "gemma4:e4b";
+export const GEMMA_ANALYSIS_MODEL = process.env.GEMMA_ANALYSIS_MODEL ?? "gemma4:e4b";
 export const GEMMA_FINETUNED_MODEL = process.env.GEMMA_FINETUNED_MODEL ?? "";
 export const GEMMA_MODEL_VERSION = process.env.GEMMA_MODEL_VERSION;
 export const GEMMA_ADAPTER_VERSION = process.env.GEMMA_ADAPTER_VERSION;
 export const GEMMA_MODE = process.env.GEMMA_MODE ?? "local_first";
 export const AI_ALLOW_CLOUD_FALLBACK = process.env.AI_ALLOW_CLOUD_FALLBACK === "true";
 
+/** Builds audit metadata that follows the selected Gemma runtime and model labels. */
 export function getGemmaRuntimeMetadata(modelName?: string): GemmaRuntimeMetadata {
   return {
     modelName,
@@ -28,6 +29,10 @@ export function getGemmaRuntimeMetadata(modelName?: string): GemmaRuntimeMetadat
   };
 }
 
+/**
+ * Routes structured AI work to the configured Gemma runtime.
+ * Module A expects Ollama by default, while hosted fallback remains opt-in.
+ */
 export async function generateStructuredJson<T>(
   request: GenerateStructuredJsonRequest
 ): Promise<GenerateStructuredJsonResult<T>> {

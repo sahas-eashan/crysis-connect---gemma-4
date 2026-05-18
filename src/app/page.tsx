@@ -105,7 +105,7 @@ export default function HomePage() {
       <div className="mx-auto flex max-w-7xl flex-col gap-10">
         <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
           <div>
-            <Badge className="border-primary/40 bg-primary/10 text-primary">CryptX 2.0 hackathon build</Badge>
+            <Badge className="border-primary/40 bg-primary/10 text-primary">CrisisConnect response platform</Badge>
             <h1 className="mt-4 max-w-4xl text-5xl font-bold tracking-tight text-white lg:text-6xl">
               CrisisConnect
               <span className="block bg-gradient-to-r from-sky-300 via-cyan-200 to-emerald-300 bg-clip-text text-transparent">

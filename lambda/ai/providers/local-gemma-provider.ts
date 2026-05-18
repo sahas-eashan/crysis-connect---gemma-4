@@ -8,6 +8,9 @@ function createSchemaInstruction(schema: Record<string, unknown>) {
 function extractJsonText(text: string) {
   const trimmed = text.trim();
 
+  // Ollama is asked for JSON mode, but model output can still include fences or
+  // prose. Normalize the response before validation so transient formatting does
+  // not break operational workflows.
   if (trimmed.startsWith("```")) {
     const withoutFence = trimmed.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
     if (withoutFence) return withoutFence;
@@ -32,6 +35,13 @@ function normalizeEndpoint(endpoint: string) {
   return endpoint.replace(/\/+$/, "");
 }
 
+/**
+ * Sends a structured JSON task to an Ollama-compatible Gemma endpoint.
+ *
+ * In local development this endpoint is usually http://localhost:11434. In AWS,
+ * it must be a gateway that Lambda can reach; Lambda localhost is not the
+ * developer machine.
+ */
 export async function generateWithLocalGemma<T>(
   request: GenerateStructuredJsonRequest,
   options: {
