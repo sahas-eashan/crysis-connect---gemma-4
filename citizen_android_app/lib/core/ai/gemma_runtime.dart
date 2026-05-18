@@ -76,17 +76,25 @@ class GemmaRuntime {
   Future<String?> importModelFile() async {
     final picked = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: const ['task', 'litertlm'],
+      allowedExtensions: const ['task'],
       allowMultiple: false,
     );
     final sourcePath = picked?.files.single.path;
     if (sourcePath == null) return null;
 
+    final fileName = picked!.files.single.name;
+    if (!fileName.toLowerCase().endsWith('.task')) {
+      throw UnsupportedError(
+        'This build uses MediaPipe LLM Inference and can load .task model files. '
+        '.litertlm files require a LiteRT-LM runtime integration.',
+      );
+    }
+
     final directory = await getApplicationSupportDirectory();
     final modelDirectory = Directory('${directory.path}${Platform.pathSeparator}models');
     await modelDirectory.create(recursive: true);
     final target = File(
-      '${modelDirectory.path}${Platform.pathSeparator}${picked!.files.single.name}',
+      '${modelDirectory.path}${Platform.pathSeparator}$fileName',
     );
     await File(sourcePath).copy(target.path);
     return target.path;

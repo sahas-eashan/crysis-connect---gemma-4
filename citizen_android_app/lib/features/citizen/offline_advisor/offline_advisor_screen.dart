@@ -60,8 +60,22 @@ class _OfflineAdvisorScreenState extends State<OfflineAdvisorScreen> {
   }
 
   Future<void> _importModel() async {
-    final path = await GemmaRuntime.instance.importModelFile();
-    if (path != null) await _loadModel(path: path);
+    setState(() => _loading = true);
+    try {
+      final path = await GemmaRuntime.instance.importModelFile();
+      if (path != null) {
+        await _loadModel(path: path);
+      } else {
+        setState(() => _message = 'Model import cancelled.');
+      }
+    } catch (error) {
+      setState(
+        () => _message =
+            error.toString().replaceFirst('Unsupported operation: ', ''),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _generateAdvice() async {
