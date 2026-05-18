@@ -110,13 +110,13 @@ variable "gemma_endpoint" {
 variable "gemma_interactive_model" {
   description = "Gemma model used for citizen, NGO, alert, and dispatch interactions."
   type        = string
-  default     = "gemma4:e4b-it"
+  default     = "gemma4:e4b"
 }
 
 variable "gemma_analysis_model" {
   description = "Gemma model used for government command analysis."
   type        = string
-  default     = "gemma4:26b-it"
+  default     = "gemma4:e4b"
 }
 
 variable "gemma_finetuned_model" {

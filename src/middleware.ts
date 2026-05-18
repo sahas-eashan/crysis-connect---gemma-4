@@ -6,6 +6,11 @@ const guardedPrefixes = {
   "/admin": ["government"]
 } as const;
 
+/**
+ * Applies lightweight role gating for portal routes after Cognito is configured.
+ * In local/demo mode the app stays navigable so UI and Gemma flows can be tested
+ * without provisioning AWS first.
+ */
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
