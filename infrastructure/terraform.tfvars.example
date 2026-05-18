@@ -19,3 +19,6 @@ offline_tile_url_template = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 offline_tile_min_zoom     = 12
 offline_tile_max_zoom     = 15
 allowed_cidr_blocks = ["0.0.0.0/0"]
+gemini_api_key      = ""
+gemini_interactive_model = "gemini-2.5-flash"
+gemini_analysis_model    = "gemini-2.5-pro"
