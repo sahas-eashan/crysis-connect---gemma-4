@@ -955,6 +955,3 @@ extension on Disaster {
   }
 }
 
-extension<T> on List<T> {
-  T? get firstOrNull => isEmpty ? null : first;
-}
