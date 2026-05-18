@@ -41,7 +41,7 @@ CrisisConnect addresses that gap with a single platform that:
 
 ## Key Innovation Features
 
-- **Gemma 4 local intelligence**: structured SOS preparation, multilingual safety guidance, command briefs, and dispatch recommendations run through a Gemma provider layer.
+- **Hybrid Gemini & Gemma 4 AI Intelligence**: Powerful cloud-based Gemini orchestrates robust structured SOS preparation, multilingual safety guidance, command briefs, and dispatch recommendations. When the network is down, the system seamlessly falls back to local Gemma 4, ensuring high availability and unbroken crisis response.
 - **Geofenced alerts**: disaster polygons in PostGIS drive targeted notifications.
 - **Capacity-aware safe-zone routing**: citizens are routed to the nearest shelter with remaining capacity.
 - **Intelligent SOS triage**: nearest available responders are identified using geospatial proximity.
@@ -56,7 +56,7 @@ CrisisConnect addresses that gap with a single platform that:
 - **Maps**: MapLibre + OpenStreetMap
 - **Charts**: Recharts
 - **Database extensions**: PostGIS
-- **AI runtime**: Gemma 4 via local Ollama / reachable edge gateway
+- **AI runtime**: Gemini (Primary Cloud Provider) with Gemma 4 via local Ollama / reachable edge gateway as a resilient offline fallback
 
 ## Architecture Overview
 
