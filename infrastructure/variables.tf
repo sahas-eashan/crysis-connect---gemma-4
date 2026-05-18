@@ -154,3 +154,22 @@ variable "offline_tile_max_zoom" {
   type        = number
   default     = 15
 }
+
+variable "gemini_api_key" {
+  description = "API key for Gemini models."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "gemini_interactive_model" {
+  description = "Gemini interactive model."
+  type        = string
+  default     = "gemini-2.5-flash"
+}
+
+variable "gemini_analysis_model" {
+  description = "Gemini analysis model."
+  type        = string
+  default     = "gemini-2.5-pro"
+}

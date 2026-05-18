@@ -1,16 +1,4 @@
-import { Pool } from "pg";
-
-import {
-  GEMMA_ANALYSIS_MODEL,
-  GEMMA_INTERACTIVE_MODEL,
-  generateStructuredJson,
-  getGemmaRuntimeMetadata
-} from "./providers/gemma-provider.js";
-import {
-  GEMINI_ANALYSIS_MODEL,
-  GEMINI_INTERACTIVE_MODEL,
-  generateWithGemini
-} from "./providers/gemini-provider.js";
+﻿import { Pool } from "pg";
 
 type AppSyncEvent = {
   arguments: Record<string, any>;
@@ -47,6 +35,10 @@ type AuditInsert = {
   tokenUsage: number | null;
 };
 
+type GeminiHttpError = Error & {
+  statusCode?: number;
+};
+
 const pool = new Pool({
   host: process.env.DB_HOST,
   port: Number(process.env.DB_PORT ?? 5432),
@@ -59,6 +51,9 @@ const pool = new Pool({
   max: 4
 });
 
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? "";
+const INTERACTIVE_MODEL = process.env.GEMINI_INTERACTIVE_MODEL ?? "gemini-2.5-flash";
+const ANALYSIS_MODEL = process.env.GEMINI_ANALYSIS_MODEL ?? "gemini-2.5-pro";
 const WINDOW_MINUTES = Number(process.env.AI_RATE_LIMIT_WINDOW_MINUTES ?? 5);
 const DEFAULT_RATE_LIMIT = Number(process.env.AI_RATE_LIMIT_DEFAULT ?? 10);
 const CITIZEN_RATE_LIMIT = Number(process.env.AI_RATE_LIMIT_CITIZEN ?? 6);
@@ -192,17 +187,8 @@ function aiMeta(
     warnings: string[];
     requiresHumanApproval: boolean;
     riskFlags: AuditInsert["riskFlags"];
-    modelName?: string;
-    modelVersion?: string;
-    adapterVersion?: string;
-    runtime?: "on_device" | "edge_gateway" | "command_center" | "cloud";
-    offlineMode?: boolean;
-    dataFreshnessMinutes?: number | null;
-    groundingSources?: string[];
   }
 ) {
-  const gemmaRuntime = getGemmaRuntimeMetadata(overrides.modelName ?? audit?.model);
-
   return {
     status: overrides.status,
     confidence: overrides.confidence,
@@ -210,14 +196,7 @@ function aiMeta(
     warnings: overrides.warnings,
     requiresHumanApproval: overrides.requiresHumanApproval,
     audit,
-    riskFlags: overrides.riskFlags,
-    modelName: overrides.modelName ?? audit?.model ?? gemmaRuntime.modelName,
-    modelVersion: overrides.modelVersion ?? gemmaRuntime.modelVersion ?? null,
-    adapterVersion: overrides.adapterVersion ?? gemmaRuntime.adapterVersion ?? null,
-    runtime: overrides.runtime ?? (audit?.model?.startsWith("gemini") ? "cloud" : gemmaRuntime.runtime),
-    offlineMode: overrides.offlineMode ?? gemmaRuntime.offlineMode,
-    dataFreshnessMinutes: overrides.dataFreshnessMinutes ?? null,
-    groundingSources: overrides.groundingSources ?? overrides.sourceIds
+    riskFlags: overrides.riskFlags
   };
 }
 
@@ -309,11 +288,11 @@ function nearestSafeZoneGuidance(disaster: DbRow | null, safeZone: DbRow | null,
         ? `Move toward ${safeZone.name} if it is safe to travel. Avoid flooded roads and use boiled or bottled water only.`
         : "Move toward the nearest verified safe zone if it is safe to travel. Avoid flooded roads and use boiled or bottled water only.",
       sinhala: safeZone
-        ? `${safeZone.name} වෙත ගමන් කිරීම ආරක්ෂිත නම් එම ස්ථානය වෙත යන්න. ජලයෙන් වැසුණු මාර්ග වලින් වළකින්න සහ තැම්බූ හෝ බෝතල් ජලය පමණක් භාවිතා කරන්න.`
-        : "ගමන් කිරීම ආරක්ෂිත නම් ආසන්නයේ ඇති සත්‍යාපිත ආරක්ෂිත ස්ථානය වෙත යන්න. ජලයෙන් වැසුණු මාර්ග වලින් වළකින්න සහ තැම්බූ හෝ බෝතල් ජලය පමණක් භාවිතා කරන්න.",
+        ? `${safeZone.name} ÓÀÇÓÀÖÓÂ¡ ÓÂ£ÓÂ©ÓÂ▒ÓÀè ÓÂÜÓÀÆÓÂ╗ÓÀôÓÂ© ÓÂåÓÂ╗ÓÂÜÓÀèÓÀéÓÀÆÓÂ¡ ÓÂ▒ÓÂ©ÓÀè ÓÂæÓÂ© ÓÀâÓÀèÓÂ«ÓÀÅÓÂ▒ÓÂ║ ÓÀÇÓÀÖÓÂ¡ ÓÂ║ÓÂ▒ÓÀèÓÂ▒. ÓÂóÓÂ¢ÓÂ║ÓÀÖÓÂ▒ÓÀè ÓÀÇÓÀÉÓÀâÓÀöÓÂ½ÓÀö ÓÂ©ÓÀÅÓÂ╗ÓÀèÓÂ£ ÓÀÇÓÂ¢ÓÀÆÓÂ▒ÓÀè ÓÀÇÓÀàÓÂÜÓÀÆÓÂ▒ÓÀèÓÂ▒ ÓÀâÓÀä ÓÂ¡ÓÀÉÓÂ©ÓÀèÓÂÂÓÀû ÓÀäÓÀØ ÓÂÂÓÀØÓÂ¡ÓÂ¢ÓÀè ÓÂóÓÂ¢ÓÂ║ ÓÂ┤ÓÂ©ÓÂ½ÓÂÜÓÀè ÓÂÀÓÀÅÓÀÇÓÀÆÓÂ¡ÓÀÅ ÓÂÜÓÂ╗ÓÂ▒ÓÀèÓÂ▒.`
+        : "ÓÂ£ÓÂ©ÓÂ▒ÓÀè ÓÂÜÓÀÆÓÂ╗ÓÀôÓÂ© ÓÂåÓÂ╗ÓÂÜÓÀèÓÀéÓÀÆÓÂ¡ ÓÂ▒ÓÂ©ÓÀè ÓÂåÓÀâÓÂ▒ÓÀèÓÂ▒ÓÂ║ÓÀÜ ÓÂçÓÂ¡ÓÀÆ ÓÀâÓÂ¡ÓÀèÔÇìÓÂ║ÓÀÅÓÂ┤ÓÀÆÓÂ¡ ÓÂåÓÂ╗ÓÂÜÓÀèÓÀéÓÀÆÓÂ¡ ÓÀâÓÀèÓÂ«ÓÀÅÓÂ▒ÓÂ║ ÓÀÇÓÀÖÓÂ¡ ÓÂ║ÓÂ▒ÓÀèÓÂ▒. ÓÂóÓÂ¢ÓÂ║ÓÀÖÓÂ▒ÓÀè ÓÀÇÓÀÉÓÀâÓÀöÓÂ½ÓÀö ÓÂ©ÓÀÅÓÂ╗ÓÀèÓÂ£ ÓÀÇÓÂ¢ÓÀÆÓÂ▒ÓÀè ÓÀÇÓÀàÓÂÜÓÀÆÓÂ▒ÓÀèÓÂ▒ ÓÀâÓÀä ÓÂ¡ÓÀÉÓÂ©ÓÀèÓÂÂÓÀû ÓÀäÓÀØ ÓÂÂÓÀØÓÂ¡ÓÂ¢ÓÀè ÓÂóÓÂ¢ÓÂ║ ÓÂ┤ÓÂ©ÓÂ½ÓÂÜÓÀè ÓÂÀÓÀÅÓÀÇÓÀÆÓÂ¡ÓÀÅ ÓÂÜÓÂ╗ÓÂ▒ÓÀèÓÂ▒.",
       tamil: safeZone
-        ? `பாதுகாப்பாக பயணம் செய்ய முடிந்தால் ${safeZone.name} நோக்கி செல்லுங்கள். வெள்ளமான சாலைகளை தவிர்த்து, காய்ச்சிய அல்லது பாட்டில் தண்ணீரை மட்டும் பயன்படுத்துங்கள்.`
-        : "பாதுகாப்பாக பயணம் செய்ய முடிந்தால் அருகிலுள்ள சரிபார்க்கப்பட்ட பாதுகாப்பு மையத்திற்குச் செல்லுங்கள். வெள்ளமான சாலைகளை தவிர்த்து, காய்ச்சிய அல்லது பாட்டில் தண்ணீரை மட்டும் பயன்படுத்துங்கள்."
+        ? `Ó«¬Ó«¥Ó«ñÓ»üÓ«òÓ«¥Ó«¬Ó»ìÓ«¬Ó«¥Ó«ò Ó«¬Ó«»Ó«úÓ««Ó»ì Ó«ÜÓ»åÓ«»Ó»ìÓ«» Ó««Ó»üÓ«ƒÓ«┐Ó«¿Ó»ìÓ«ñÓ«¥Ó«▓Ó»ì ${safeZone.name} Ó«¿Ó»ïÓ«òÓ»ìÓ«òÓ«┐ Ó«ÜÓ»åÓ«▓Ó»ìÓ«▓Ó»üÓ«ÖÓ»ìÓ«òÓ«│Ó»ì. Ó«ÁÓ»åÓ«│Ó»ìÓ«│Ó««Ó«¥Ó«® Ó«ÜÓ«¥Ó«▓Ó»êÓ«òÓ«│Ó»ê Ó«ñÓ«ÁÓ«┐Ó«░Ó»ìÓ«ñÓ»ìÓ«ñÓ»ü, Ó«òÓ«¥Ó«»Ó»ìÓ«ÜÓ»ìÓ«ÜÓ«┐Ó«» Ó«àÓ«▓Ó»ìÓ«▓Ó«ñÓ»ü Ó«¬Ó«¥Ó«ƒÓ»ìÓ«ƒÓ«┐Ó«▓Ó»ì Ó«ñÓ«úÓ»ìÓ«úÓ»ÇÓ«░Ó»ê Ó««Ó«ƒÓ»ìÓ«ƒÓ»üÓ««Ó»ì Ó«¬Ó«»Ó«®Ó»ìÓ«¬Ó«ƒÓ»üÓ«ñÓ»ìÓ«ñÓ»üÓ«ÖÓ»ìÓ«òÓ«│Ó»ì.`
+        : "Ó«¬Ó«¥Ó«ñÓ»üÓ«òÓ«¥Ó«¬Ó»ìÓ«¬Ó«¥Ó«ò Ó«¬Ó«»Ó«úÓ««Ó»ì Ó«ÜÓ»åÓ«»Ó»ìÓ«» Ó««Ó»üÓ«ƒÓ«┐Ó«¿Ó»ìÓ«ñÓ«¥Ó«▓Ó»ì Ó«àÓ«░Ó»üÓ«òÓ«┐Ó«▓Ó»üÓ«│Ó»ìÓ«│ Ó«ÜÓ«░Ó«┐Ó«¬Ó«¥Ó«░Ó»ìÓ«òÓ»ìÓ«òÓ«¬Ó»ìÓ«¬Ó«ƒÓ»ìÓ«ƒ Ó«¬Ó«¥Ó«ñÓ»üÓ«òÓ«¥Ó«¬Ó»ìÓ«¬Ó»ü Ó««Ó»êÓ«»Ó«ñÓ»ìÓ«ñÓ«┐Ó«▒Ó»ìÓ«òÓ»üÓ«ÜÓ»ì Ó«ÜÓ»åÓ«▓Ó»ìÓ«▓Ó»üÓ«ÖÓ»ìÓ«òÓ«│Ó»ì. Ó«ÁÓ»åÓ«│Ó»ìÓ«│Ó««Ó«¥Ó«® Ó«ÜÓ«¥Ó«▓Ó»êÓ«òÓ«│Ó»ê Ó«ñÓ«ÁÓ«┐Ó«░Ó»ìÓ«ñÓ»ìÓ«ñÓ»ü, Ó«òÓ«¥Ó«»Ó»ìÓ«ÜÓ»ìÓ«ÜÓ«┐Ó«» Ó«àÓ«▓Ó»ìÓ«▓Ó«ñÓ»ü Ó«¬Ó«¥Ó«ƒÓ»ìÓ«ƒÓ«┐Ó«▓Ó»ì Ó«ñÓ«úÓ»ìÓ«úÓ»ÇÓ«░Ó»ê Ó««Ó«ƒÓ»ìÓ«ƒÓ»üÓ««Ó»ì Ó«¬Ó«»Ó«®Ó»ìÓ«¬Ó«ƒÓ»üÓ«ñÓ»ìÓ«ñÓ»üÓ«ÖÓ»ìÓ«òÓ«│Ó»ì."
     }
   };
 }
@@ -331,8 +310,8 @@ function fallbackPreparedSos(input: { type: string; description: string }) {
     ],
     translations: {
       english: refined,
-      sinhala: `${input.type.toUpperCase()} හදිසි තත්ත්වය: ${trimmed}. වහාම ප්‍රතිචාරක පරීක්ෂාව අවශ්‍යයි.`,
-      tamil: `${input.type.toUpperCase()} அவசரநிலை: ${trimmed}. உடனடி மீட்பாளர் மதிப்பாய்வு தேவை.`
+      sinhala: `${input.type.toUpperCase()} ÓÀäÓÂ»ÓÀÆÓÀâÓÀÆ ÓÂ¡ÓÂ¡ÓÀèÓÂ¡ÓÀèÓÀÇÓÂ║: ${trimmed}. ÓÀÇÓÀäÓÀÅÓÂ© ÓÂ┤ÓÀèÔÇìÓÂ╗ÓÂ¡ÓÀÆÓÂáÓÀÅÓÂ╗ÓÂÜ ÓÂ┤ÓÂ╗ÓÀôÓÂÜÓÀèÓÀéÓÀÅÓÀÇ ÓÂàÓÀÇÓÀüÓÀèÔÇìÓÂ║ÓÂ║ÓÀÆ.`,
+      tamil: `${input.type.toUpperCase()} Ó«àÓ«ÁÓ«ÜÓ«░Ó«¿Ó«┐Ó«▓Ó»ê: ${trimmed}. Ó«ëÓ«ƒÓ«®Ó«ƒÓ«┐ Ó««Ó»ÇÓ«ƒÓ»ìÓ«¬Ó«¥Ó«│Ó«░Ó»ì Ó««Ó«ñÓ«┐Ó«¬Ó»ìÓ«¬Ó«¥Ó«»Ó»ìÓ«ÁÓ»ü Ó«ñÓ»çÓ«ÁÓ»ê.`
     }
   };
 }
@@ -375,8 +354,8 @@ function fallbackIncidentBrief(context: {
     ],
     translations: {
       english: "Flood pressure is increasing. Protect shelter capacity and keep evacuation support ready.",
-      sinhala: "ගංවතුර පීඩනය වැඩි වෙමින් පවතී. ආරක්ෂිත නවාතැන් ධාරිතාව ආරක්ෂා කර ඉවත් කිරීමේ සහාය සූදානම් තබන්න.",
-      tamil: "வெள்ள அழுத்தம் அதிகரிக்கிறது. பாதுகாப்பு மைய திறனை காக்கவும், வெளியேற்ற உதவியை தயார் நிலையில் வைத்திருக்கவும்."
+      sinhala: "ÓÂ£ÓÂéÓÀÇÓÂ¡ÓÀöÓÂ╗ ÓÂ┤ÓÀôÓÂ®ÓÂ▒ÓÂ║ ÓÀÇÓÀÉÓÂ®ÓÀÆ ÓÀÇÓÀÖÓÂ©ÓÀÆÓÂ▒ÓÀè ÓÂ┤ÓÀÇÓÂ¡ÓÀô. ÓÂåÓÂ╗ÓÂÜÓÀèÓÀéÓÀÆÓÂ¡ ÓÂ▒ÓÀÇÓÀÅÓÂ¡ÓÀÉÓÂ▒ÓÀè ÓÂ░ÓÀÅÓÂ╗ÓÀÆÓÂ¡ÓÀÅÓÀÇ ÓÂåÓÂ╗ÓÂÜÓÀèÓÀéÓÀÅ ÓÂÜÓÂ╗ ÓÂëÓÀÇÓÂ¡ÓÀè ÓÂÜÓÀÆÓÂ╗ÓÀôÓÂ©ÓÀÜ ÓÀâÓÀäÓÀÅÓÂ║ ÓÀâÓÀûÓÂ»ÓÀÅÓÂ▒ÓÂ©ÓÀè ÓÂ¡ÓÂÂÓÂ▒ÓÀèÓÂ▒.",
+      tamil: "Ó«ÁÓ»åÓ«│Ó»ìÓ«│ Ó«àÓ«┤Ó»üÓ«ñÓ»ìÓ«ñÓ««Ó»ì Ó«àÓ«ñÓ«┐Ó«òÓ«░Ó«┐Ó«òÓ»ìÓ«òÓ«┐Ó«▒Ó«ñÓ»ü. Ó«¬Ó«¥Ó«ñÓ»üÓ«òÓ«¥Ó«¬Ó»ìÓ«¬Ó»ü Ó««Ó»êÓ«» Ó«ñÓ«┐Ó«▒Ó«®Ó»ê Ó«òÓ«¥Ó«òÓ»ìÓ«òÓ«ÁÓ»üÓ««Ó»ì, Ó«ÁÓ»åÓ«│Ó«┐Ó«»Ó»çÓ«▒Ó»ìÓ«▒ Ó«ëÓ«ñÓ«ÁÓ«┐Ó«»Ó»ê Ó«ñÓ«»Ó«¥Ó«░Ó»ì Ó«¿Ó«┐Ó«▓Ó»êÓ«»Ó«┐Ó«▓Ó»ì Ó«ÁÓ»êÓ«ñÓ»ìÓ«ñÓ«┐Ó«░Ó»üÓ«òÓ»ìÓ«òÓ«ÁÓ»üÓ««Ó»ì."
     }
   };
 }
@@ -394,8 +373,8 @@ function fallbackAlertDraft(input: any, disaster: DbRow | null) {
       ]
     },
     english: `${title}: ${input.body} Move to the nearest safe zone shown in CrisisConnect if travel is safe.`,
-    sinhala: `${title}: ${input.body} ගමන් කිරීම ආරක්ෂිත නම් CrisisConnect හි පෙන්වන ආසන්නතම ආරක්ෂිත ස්ථානය වෙත යන්න.`,
-    tamil: `${title}: ${input.body} பாதுகாப்பாக பயணம் செய்ய முடிந்தால் CrisisConnect இல் காட்டப்படும் அருகிலுள்ள பாதுகாப்பு மையத்திற்குச் செல்லுங்கள்.`
+    sinhala: `${title}: ${input.body} ÓÂ£ÓÂ©ÓÂ▒ÓÀè ÓÂÜÓÀÆÓÂ╗ÓÀôÓÂ© ÓÂåÓÂ╗ÓÂÜÓÀèÓÀéÓÀÆÓÂ¡ ÓÂ▒ÓÂ©ÓÀè CrisisConnect ÓÀäÓÀÆ ÓÂ┤ÓÀÖÓÂ▒ÓÀèÓÀÇÓÂ▒ ÓÂåÓÀâÓÂ▒ÓÀèÓÂ▒ÓÂ¡ÓÂ© ÓÂåÓÂ╗ÓÂÜÓÀèÓÀéÓÀÆÓÂ¡ ÓÀâÓÀèÓÂ«ÓÀÅÓÂ▒ÓÂ║ ÓÀÇÓÀÖÓÂ¡ ÓÂ║ÓÂ▒ÓÀèÓÂ▒.`,
+    tamil: `${title}: ${input.body} Ó«¬Ó«¥Ó«ñÓ»üÓ«òÓ«¥Ó«¬Ó»ìÓ«¬Ó«¥Ó«ò Ó«¬Ó«»Ó«úÓ««Ó»ì Ó«ÜÓ»åÓ«»Ó»ìÓ«» Ó««Ó»üÓ«ƒÓ«┐Ó«¿Ó»ìÓ«ñÓ«¥Ó«▓Ó»ì CrisisConnect Ó«çÓ«▓Ó»ì Ó«òÓ«¥Ó«ƒÓ»ìÓ«ƒÓ«¬Ó»ìÓ«¬Ó«ƒÓ»üÓ««Ó»ì Ó«àÓ«░Ó»üÓ«òÓ«┐Ó«▓Ó»üÓ«│Ó»ìÓ«│ Ó«¬Ó«¥Ó«ñÓ»üÓ«òÓ«¥Ó«¬Ó»ìÓ«¬Ó»ü Ó««Ó»êÓ«»Ó«ñÓ»ìÓ«ñÓ«┐Ó«▒Ó»ìÓ«òÓ»üÓ«ÜÓ»ì Ó«ÜÓ»åÓ«▓Ó»ìÓ«▓Ó»üÓ«ÖÓ»ìÓ«òÓ«│Ó»ì.`
   };
 }
 
@@ -471,34 +450,201 @@ function fallbackResourceDispatch(request: DbRow | null, resources: DbRow[]) {
   };
 }
 
-function toAiErrorMessage(action: string, error: unknown) {
-  if (error instanceof Error && error.message.trim()) {
-    return error.message;
-  }
-
-  return `Gemma 4 failed while running ${action}.`;
+function createSchemaInstruction(schema: Record<string, unknown>) {
+  return JSON.stringify(schema);
 }
 
-async function generateAiJson<T>(request: {
+function mapSchemaPrimitive(value: string) {
+  if (value === "string|null") {
+    return {
+      type: "string",
+      nullable: true
+    };
+  }
+
+  if (["string", "number", "integer", "boolean", "null"].includes(value)) {
+    return { type: value };
+  }
+
+  return { type: "string" };
+}
+
+function toGeminiSchema(schema: unknown): Record<string, unknown> {
+  if (Array.isArray(schema)) {
+    return {
+      type: "array",
+      items: toGeminiSchema(schema[0] ?? "string")
+    };
+  }
+
+  if (typeof schema === "string") {
+    return mapSchemaPrimitive(schema);
+  }
+
+  if (schema && typeof schema === "object") {
+    const entries = Object.entries(schema);
+    return {
+      type: "object",
+      properties: Object.fromEntries(entries.map(([key, value]) => [key, toGeminiSchema(value)])),
+      required: entries.map(([key]) => key)
+    };
+  }
+
+  return { type: "string" };
+}
+
+function extractJsonText(text: string) {
+  const trimmed = text.trim();
+
+  if (trimmed.startsWith("```")) {
+    const withoutFence = trimmed.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+    if (withoutFence) return withoutFence;
+  }
+
+  const firstObject = trimmed.indexOf("{");
+  const lastObject = trimmed.lastIndexOf("}");
+  if (firstObject >= 0 && lastObject > firstObject) {
+    return trimmed.slice(firstObject, lastObject + 1);
+  }
+
+  const firstArray = trimmed.indexOf("[");
+  const lastArray = trimmed.lastIndexOf("]");
+  if (firstArray >= 0 && lastArray > firstArray) {
+    return trimmed.slice(firstArray, lastArray + 1);
+  }
+
+  return trimmed;
+}
+
+async function callGemini<T>({
+  taskName,
+  model,
+  systemInstruction,
+  prompt,
+  schema
+}: {
   taskName: string;
   model: string;
   systemInstruction: string;
   prompt: string;
   schema: Record<string, unknown>;
 }) {
-  try {
-    const isAnalysis = request.model === GEMMA_ANALYSIS_MODEL;
-    const geminiModel = isAnalysis ? GEMINI_ANALYSIS_MODEL : GEMINI_INTERACTIVE_MODEL;
-    const result = await generateWithGemini<T>({
-      ...request,
-      model: geminiModel
-    });
-    return result;
-  } catch (error) {
-    console.warn(`Gemini generation failed for ${request.taskName}, falling back to Gemma:`, error);
-    const result = await generateStructuredJson<T>(request);
-    return result;
+  if (!GEMINI_API_KEY) return null;
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: systemInstruction }]
+        },
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: `${prompt}\n\nReturn JSON only. Follow this schema exactly:\n${createSchemaInstruction(schema)}`
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          topP: 0.8,
+          responseMimeType: "application/json",
+          responseSchema: toGeminiSchema(schema)
+        },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
+        ]
+      })
+    }
+  );
+
+  if (!response.ok) {
+    const details = await response.text();
+    console.error(
+      JSON.stringify({
+        level: "error",
+        taskName,
+        model,
+        event: "gemini_http_error",
+        statusCode: response.status,
+        details: details.slice(0, 600)
+      })
+    );
+    const error = new Error(`Gemini request failed with ${response.status}`) as GeminiHttpError;
+    error.statusCode = response.status;
+    throw error;
   }
+
+  const payload = (await response.json()) as any;
+  const finishReason = payload.candidates?.[0]?.finishReason ?? null;
+  const text = payload.candidates?.[0]?.content?.parts?.map((part: any) => part.text ?? "").join("")?.trim();
+  if (!text) {
+    console.warn(
+      JSON.stringify({
+        level: "warn",
+        taskName,
+        model,
+        event: "gemini_empty_response",
+        finishReason,
+        promptFeedback: payload.promptFeedback ?? null
+      })
+    );
+    return null;
+  }
+
+  try {
+    const normalizedText = extractJsonText(text);
+    const parsed = JSON.parse(normalizedText) as T;
+    console.log(
+      JSON.stringify({
+        level: "info",
+        taskName,
+        model,
+        event: "gemini_completed",
+        finishReason
+      })
+    );
+    return parsed;
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        taskName,
+        model,
+        event: "gemini_parse_error",
+        finishReason,
+        rawText: text.slice(0, 600),
+        message: error instanceof Error ? error.message : "Unknown parse error"
+      })
+    );
+    throw error;
+  }
+}
+
+function isGeminiQuotaError(error: unknown) {
+  return typeof (error as GeminiHttpError | undefined)?.statusCode === "number" && (error as GeminiHttpError).statusCode === 429;
+}
+
+function toAiErrorMessage(action: string, error: unknown) {
+  if (isGeminiQuotaError(error)) {
+    return `Live AI is temporarily unavailable for ${action} because the current Gemini quota has been exceeded.`;
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return `Live AI failed while running ${action}.`;
 }
 
 function ensureStringArray(value: unknown) {
@@ -617,9 +763,9 @@ async function generateCitizenGuidance(event: AppSyncEvent) {
   const tokenUsage: number | null = null;
 
   try {
-    const result = await generateAiJson<ReturnType<typeof nearestSafeZoneGuidance>>({
+    const generated = await callGemini<ReturnType<typeof nearestSafeZoneGuidance>>({
       taskName: "getCitizenGuidance",
-      model: GEMMA_INTERACTIVE_MODEL,
+      model: INTERACTIVE_MODEL,
       systemInstruction:
         "You are a safety-focused disaster assistant. Use only the structured CrisisConnect context provided. Do not invent shelters, resources, or capabilities. Keep language clear, calm, and concise.",
       prompt: JSON.stringify({
@@ -644,7 +790,6 @@ async function generateCitizenGuidance(event: AppSyncEvent) {
       }
     });
 
-    const generated = result?.value;
     if (!generated || typeof generated.title !== "string") {
       throw new Error("Live AI returned an invalid citizen guidance payload.");
     }
@@ -661,7 +806,7 @@ async function generateCitizenGuidance(event: AppSyncEvent) {
       action: "getCitizenGuidance",
       role,
       userId,
-      model: typeof result !== "undefined" ? result.modelName : GEMMA_INTERACTIVE_MODEL,
+      model: INTERACTIVE_MODEL,
       status: "completed",
       reviewStatus: "not_required",
       confidence: 0.86,
@@ -706,9 +851,9 @@ async function generatePreparedSos(event: AppSyncEvent) {
 
   if (!riskFlags.blocked) {
     try {
-      const result = await generateAiJson<typeof payload>({
+      const generated = await callGemini<typeof payload>({
         taskName: "prepareSosSubmission",
-        model: GEMMA_INTERACTIVE_MODEL,
+        model: INTERACTIVE_MODEL,
         systemInstruction:
           "You are preparing an SOS summary for emergency responders. Preserve facts, remove hype, do not invent injuries or hazards, and keep the summary concise and operational.",
         prompt: JSON.stringify({
@@ -733,7 +878,6 @@ async function generatePreparedSos(event: AppSyncEvent) {
         }
       });
 
-      const generated = result?.value;
       if (generated && typeof generated.refined === "string") {
         payload = {
           original: typeof generated.original === "string" ? generated.original : input.description,
@@ -755,7 +899,7 @@ async function generatePreparedSos(event: AppSyncEvent) {
     action: "prepareSosSubmission",
     role,
     userId,
-    model: GEMMA_INTERACTIVE_MODEL,
+    model: INTERACTIVE_MODEL,
     status,
     reviewStatus: "pending_review",
     confidence,
@@ -828,12 +972,12 @@ async function generateIncidentBrief(event: AppSyncEvent) {
   );
   const warnings = ["AI-generated command briefs require duty-officer review before operational action."];
   const riskFlags = buildRiskFlags(null);
-  let modelUsed = GEMMA_ANALYSIS_MODEL;
+  let modelUsed = ANALYSIS_MODEL;
 
   try {
     const request = {
       taskName: "generateIncidentBrief",
-      model: GEMMA_ANALYSIS_MODEL,
+      model: ANALYSIS_MODEL,
       systemInstruction:
         "You are a government disaster command copilot. Use only the structured CrisisConnect data provided. Do not speculate, do not issue public promises, and keep recommendations operational and reviewable.",
       prompt: JSON.stringify({
@@ -868,21 +1012,20 @@ async function generateIncidentBrief(event: AppSyncEvent) {
     } as const;
 
     let generated: ReturnType<typeof fallbackIncidentBrief> | null = null;
-    let result = null;
+
     try {
-      result = await generateAiJson<ReturnType<typeof fallbackIncidentBrief>>(request);
-      generated = result?.value;
+      generated = await callGemini<ReturnType<typeof fallbackIncidentBrief>>(request);
     } catch (error) {
-      if (GEMMA_ANALYSIS_MODEL === GEMMA_INTERACTIVE_MODEL) {
+      if (!isGeminiQuotaError(error) || ANALYSIS_MODEL === INTERACTIVE_MODEL) {
         throw error;
       }
 
-      warnings.push(`Primary analysis model was unavailable, retrying with ${GEMMA_INTERACTIVE_MODEL}.`);
-      result = await generateAiJson<ReturnType<typeof fallbackIncidentBrief>>({
+      modelUsed = INTERACTIVE_MODEL;
+      warnings.push(`Primary analysis model quota was unavailable, so CrisisConnect retried with ${INTERACTIVE_MODEL}.`);
+      generated = await callGemini<ReturnType<typeof fallbackIncidentBrief>>({
         ...request,
-        model: GEMMA_INTERACTIVE_MODEL
+        model: INTERACTIVE_MODEL
       });
-      generated = result?.value;
     }
 
     if (generated && typeof generated.headline === "string") {
@@ -898,7 +1041,7 @@ async function generateIncidentBrief(event: AppSyncEvent) {
         action: "generateIncidentBrief",
         role,
         userId,
-        model: typeof result !== "undefined" && result ? result.modelName : modelUsed,
+        model: modelUsed,
         status: "completed",
         reviewStatus: "pending_review",
         confidence: 0.89,
@@ -945,9 +1088,9 @@ async function generateAlertDraft(event: AppSyncEvent) {
 
   if (!riskFlags.blocked) {
     try {
-      const result = await generateAiJson<typeof payload>({
+      const generated = await callGemini<typeof payload>({
         taskName: "generateAlertDraft",
-        model: GEMMA_INTERACTIVE_MODEL,
+        model: INTERACTIVE_MODEL,
         systemInstruction:
           "You are drafting a multilingual government safety alert. Keep instructions concrete, calm, and suitable for review. Do not add unsupported claims or evacuation promises.",
         prompt: JSON.stringify({
@@ -973,7 +1116,6 @@ async function generateAlertDraft(event: AppSyncEvent) {
         }
       });
 
-      const generated = result?.value;
       if (generated && typeof generated.title === "string") {
         payload = {
           title: generated.title,
@@ -997,7 +1139,7 @@ async function generateAlertDraft(event: AppSyncEvent) {
     action: "generateAlertDraft",
     role,
     userId,
-    model: GEMMA_INTERACTIVE_MODEL,
+    model: INTERACTIVE_MODEL,
     status,
     reviewStatus: "pending_review",
     confidence,
@@ -1041,9 +1183,9 @@ async function recommendOperations(event: AppSyncEvent) {
   const riskFlags = buildRiskFlags(null);
 
   try {
-    const result = await generateAiJson<ReturnType<typeof fallbackOperations>>({
+    const generated = await callGemini<ReturnType<typeof fallbackOperations>>({
       taskName: "recommendOperations",
-      model: GEMMA_INTERACTIVE_MODEL,
+      model: INTERACTIVE_MODEL,
       systemInstruction:
         "You are ranking disaster command actions for the next shift. Use only the structured data provided, avoid unsupported certainty, prefer operationally practical steps, and never print raw UUIDs or record IDs in the visible title or detail. Put any case references in relatedIds only.",
       prompt: JSON.stringify({
@@ -1072,8 +1214,7 @@ async function recommendOperations(event: AppSyncEvent) {
       }
     });
 
-    const generated = result?.value;
-      if (generated) {
+    if (generated) {
       const payload = {
         timeframe: typeof (generated as any).timeframe === "string" ? (generated as any).timeframe : timeframe,
         rationale: validateRationale((generated as any).rationale),
@@ -1092,7 +1233,7 @@ async function recommendOperations(event: AppSyncEvent) {
         action: "recommendOperations",
         role,
         userId,
-        model: GEMMA_INTERACTIVE_MODEL,
+        model: INTERACTIVE_MODEL,
         status: "completed",
         reviewStatus: "pending_review",
         confidence: 0.85,
@@ -1157,9 +1298,9 @@ async function triageSosCase(event: AppSyncEvent) {
 
   if (!riskFlags.blocked) {
     try {
-      const result = await generateAiJson<typeof payload>({
+      const generated = await callGemini<typeof payload>({
         taskName: "triageSosCase",
-        model: GEMMA_INTERACTIVE_MODEL,
+        model: INTERACTIVE_MODEL,
         systemInstruction:
           "You are triaging an SOS for NGO responders. Keep severity defensible, avoid medical diagnosis, and recommend only reviewable actions.",
         prompt: JSON.stringify({
@@ -1188,7 +1329,6 @@ async function triageSosCase(event: AppSyncEvent) {
         }
       });
 
-      const generated = result?.value;
       if (generated) {
         payload = {
           sosId: typeof (generated as any).sosId === "string" ? (generated as any).sosId : sos?.id ?? null,
@@ -1212,7 +1352,7 @@ async function triageSosCase(event: AppSyncEvent) {
     action: "triageSosCase",
     role,
     userId,
-    model: GEMMA_INTERACTIVE_MODEL,
+    model: INTERACTIVE_MODEL,
     status,
     reviewStatus: "pending_review",
     confidence,
@@ -1259,9 +1399,9 @@ async function recommendResourceDispatch(event: AppSyncEvent) {
 
   if (!riskFlags.blocked) {
     try {
-      const result = await generateAiJson<typeof payload>({
+      const generated = await callGemini<typeof payload>({
         taskName: "recommendResourceDispatch",
-        model: GEMMA_INTERACTIVE_MODEL,
+        model: INTERACTIVE_MODEL,
         systemInstruction:
           "You are recommending a resource dispatch plan for NGO field teams. Use only the structured context, avoid claiming stock certainty, and keep the plan easy to review.",
         prompt: JSON.stringify({
@@ -1287,7 +1427,6 @@ async function recommendResourceDispatch(event: AppSyncEvent) {
         }
       });
 
-      const generated = result?.value;
       if (generated) {
         payload = {
           requestId: typeof (generated as any).requestId === "string" ? (generated as any).requestId : request?.id ?? null,
@@ -1306,7 +1445,7 @@ async function recommendResourceDispatch(event: AppSyncEvent) {
     action: "recommendResourceDispatch",
     role,
     userId,
-    model: GEMMA_INTERACTIVE_MODEL,
+    model: INTERACTIVE_MODEL,
     status,
     reviewStatus: "pending_review",
     confidence,
